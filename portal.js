@@ -65,21 +65,24 @@ function msalBereit(){
   if(!window.msal || location.protocol === "file:") return false;
   pca = new msal.PublicClientApplication({
     auth: { clientId: CFG.clientId, authority: "https://login.microsoftonline.com/" + CFG.tenantId, redirectUri: location.origin + "/" },
-    cache: { cacheLocation: "sessionStorage" }
+    cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: true }
   });
   return true;
 }
 function token(){
   return pca.acquireTokenSilent({scopes: SCOPES, account: konto})
-    .catch(function(){ return pca.acquireTokenPopup({scopes: SCOPES, account: konto}); })
+    .catch(function(e){ /* Weiterleitung statt Popup: Popups scheitern auf dem Handy (In-App-Browser, Safari). */
+      if(e && /interaction_required|consent_required|login_required|no_tokens_found|monitor_window_timeout/i.test(e.errorCode || "")){ pca.acquireTokenRedirect({scopes: SCOPES, account: konto, state: location.hash}); return new Promise(function(){}); }
+      throw e; })
     .then(function(r){ return r.accessToken; });
 }
 function anmelden(){
   if(!msalBereit()){ fehlerZeigen(location.protocol === "file:" ? "Die Anmeldung funktioniert nur über die Web-Adresse, nicht als lokale Datei." : "Die Microsoft-Anmeldung konnte nicht geladen werden."); return; }
-  pca.loginPopup({scopes: SCOPES, prompt: "select_account"}).then(function(r){ kontoSetzen(r.account).then(function(){ kopfzeile(); route(); }); })
+  /* Anmeldung per Weiterleitung (funktioniert auch auf dem Handy); die Seite kommt danach mit derselben Ansicht zurück. */
+  pca.loginRedirect({scopes: SCOPES, prompt: "select_account", state: location.hash || "#/"})
     .catch(function(e){ if(e && e.errorCode === "user_cancelled") return; fehlerZeigen("Die Anmeldung hat nicht geklappt." + (e && e.errorMessage ? " (" + e.errorMessage.split("\n")[0] + ")" : "")); });
 }
-function abmelden(){ var k = konto; konto = null; kontoHash = ""; ids = null; sess = null; DATEN = null; kalInfo = null; prDrive = null; if(pca && k) pca.logoutPopup({account: k}).catch(function(){}); kopfzeile(); location.hash = "#/"; route(); }
+function abmelden(){ var k = konto; konto = null; kontoHash = ""; ids = null; sess = null; DATEN = null; kalInfo = null; prDrive = null; if(pca && k){ pca.logoutRedirect({account: k, postLogoutRedirectUri: location.origin + "/"}).catch(function(){}); return; } kopfzeile(); location.hash = "#/"; route(); }
 function angemeldet(){ return TEST || !!konto; }
 function kopfzeile(){ $("wer").textContent = TEST ? "Testmodus" : (konto ? (konto.name || konto.username || "") : ""); $("abmelden").hidden = !konto; }
 
@@ -122,11 +125,11 @@ var RECHTE = {
   teamwear: ["b9653028cf8b498aa3747d9fa3f8e64e50073f7de9fa4b5b8d36f642ef9256bc", "d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75"]
 };
 var kontoHash = "";
-var fremdKonto = false;
+var fremdKonto = false, fehlerAnmeldung = "";
 /* Nur Vereinskonten (…@1928schneeberg.de). Gäste aus Teams (z. B. #EXT#) werden abgewiesen und abgemeldet. */
 function vereinskonto(acc){ return /@1928schneeberg\.de$/i.test(String(acc && acc.username || "")); }
 function kontoSetzen(acc){
-  if(acc && !vereinskonto(acc)){ fremdKonto = true; if(pca) pca.logoutPopup({account: acc}).catch(function(){}); acc = null; }
+  if(acc && !vereinskonto(acc)){ fremdKonto = true; acc = null; }
   else if(acc) fremdKonto = false;
   konto = acc || null; kontoHash = "";
   if(!konto || !window.crypto || !crypto.subtle) return Promise.resolve();
@@ -263,6 +266,7 @@ function seiteWillkommen(s){
   add(w, img, el("h1", null, "Vereinsausschuss-Portal"),
     el("p", "lead", "Interner Bereich des Vereinsausschusses. Melde dich mit deinem Vereinskonto an (…@1928schneeberg.de)."),
     fremdKonto ? el("div", "fehler", "Dieses Konto ist kein Vereinskonto. Bitte mit einer Adresse …@1928schneeberg.de anmelden.") : null,
+    fehlerAnmeldung ? el("div", "fehler", fehlerAnmeldung) : null,
     btn("primary", "Mit Vereinskonto anmelden", anmelden));
   add(s, w);
 }
@@ -1032,7 +1036,12 @@ function route(){
 $("abmelden").addEventListener("click", abmelden);
 window.addEventListener("hashchange", route);
 if(!TEST && msalBereit()){
-  pca.handleRedirectPromise().catch(function(){}).then(function(){ var acc = pca.getAllAccounts(); return kontoSetzen(acc.length ? acc[0] : null); }).then(function(){ kopfzeile(); route(); });
+  pca.handleRedirectPromise().then(function(r){
+      var acc = r && r.account ? r.account : (pca.getAllAccounts().filter(vereinskonto)[0] || pca.getAllAccounts()[0] || null);
+      if(r && r.state && /^#\//.test(r.state) && location.hash !== r.state) history.replaceState(null, "", location.pathname + location.search + r.state);
+      return kontoSetzen(acc); })
+    .catch(function(e){ fehlerAnmeldung = "Die Anmeldung hat nicht geklappt." + (e && e.errorMessage ? " (" + e.errorMessage.split("\n")[0] + ")" : ""); return kontoSetzen(null); })
+    .then(function(){ kopfzeile(); route(); });
 } else { kopfzeile(); route(); }
 window.__portal = {reinigungRechnen: reinigungRechnen, rabattVerteilen: rabattVerteilen};
 })();
