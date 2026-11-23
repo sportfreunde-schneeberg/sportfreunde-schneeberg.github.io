@@ -122,7 +122,12 @@ var RECHTE = {
   teamwear: ["b9653028cf8b498aa3747d9fa3f8e64e50073f7de9fa4b5b8d36f642ef9256bc", "d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75"]
 };
 var kontoHash = "";
+var fremdKonto = false;
+/* Nur Vereinskonten (…@1928schneeberg.de). Gäste aus Teams (z. B. #EXT#) werden abgewiesen und abgemeldet. */
+function vereinskonto(acc){ return /@1928schneeberg\.de$/i.test(String(acc && acc.username || "")); }
 function kontoSetzen(acc){
+  if(acc && !vereinskonto(acc)){ fremdKonto = true; if(pca) pca.logoutPopup({account: acc}).catch(function(){}); acc = null; }
+  else if(acc) fremdKonto = false;
   konto = acc || null; kontoHash = "";
   if(!konto || !window.crypto || !crypto.subtle) return Promise.resolve();
   var daten = new TextEncoder().encode("spfr1928:" + String(konto.username || "").toLowerCase());
@@ -257,6 +262,7 @@ function seiteWillkommen(s){
   var img = el("img"); img.src = "img/wappen.png"; img.alt = ""; img.width = 110; img.height = 110;
   add(w, img, el("h1", null, "Vereinsausschuss-Portal"),
     el("p", "lead", "Interner Bereich des Vereinsausschusses. Melde dich mit deinem Vereinskonto an (…@1928schneeberg.de)."),
+    fremdKonto ? el("div", "fehler", "Dieses Konto ist kein Vereinskonto. Bitte mit einer Adresse …@1928schneeberg.de anmelden.") : null,
     btn("primary", "Mit Vereinskonto anmelden", anmelden));
   add(s, w);
 }
