@@ -135,3 +135,9 @@ label.fld.haken{flex-direction:row;align-items:center;gap:8px;min-height:44px}
 a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .kal .ortm{display:none}
 @media (max-width:520px){.kal th.ort,.kal td.ort{display:none}.kal .ortm{display:block}}
+/* Aufgaben */
+.tabelle td.faellig{color:var(--err);font-weight:700}
+.aufg td a{color:var(--ink);font-weight:600}
+@media print{.band,.pfad,footer,.reihe,.toast{display:none!important}body{background:#fff}.karte{break-inside:avoid;border:none;padding:0}.tabelle th{background:#1E5B2E!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+p.lead a{color:var(--green)}
+.karte > h2:first-child{margin-top:0}

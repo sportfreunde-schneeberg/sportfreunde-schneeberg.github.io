@@ -23,7 +23,7 @@ var CFG = {
 };
 /* Hauptschalter fürs Schreiben (false = Portal nur lesend). Freigegeben nach Prüfung der Excel v1.4. */
 var SCHREIBEN_FREI = true; /* freigegeben 23.11.2026 nach Test (Kabinenreinigung Zeile 35 geschrieben, geprüft, geleert) */
-var SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Calendars.ReadWrite", "Calendars.ReadWrite.Shared"];
+var SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Calendars.ReadWrite", "Calendars.ReadWrite.Shared", "Tasks.ReadWrite", "Group.Read.All"];
 var GR = "https://graph.microsoft.com/v1.0";
 var ERSTE = 5; /* erste Datenzeile */
 var MONATE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
@@ -284,7 +284,8 @@ function seiteVerwaltung(s){
   add(k, kachel("🧽", "Kabinenreinigung", "Monat eintragen, Stunden und Beträge", "#/verwaltung/reinigung"),
     kachel("📦", "Ausleihliste", "Buchungen anlegen, Preise, Rabatt und Zahlung", "#/verwaltung/ausleihe"),
     kachel("🔑", "Schlüssel", "Wer hat welchen Schlüssel, Schlösser", "#/verwaltung/schluessel"),
-    kachel("🗂️", "Inventar", "Gegenstände, Lagerorte und Leihgebühren", "#/verwaltung/inventar"));
+    kachel("🗂️", "Inventar", "Gegenstände, Lagerorte und Leihgebühren", "#/verwaltung/inventar"),
+    kachel("✅", "Aufgaben", "Offene Aufgaben aus Planner für die monatliche Ausschusssitzung", "#/verwaltung/aufgaben"));
   add(s, k);
   laden().then(function(D){
     if(DATEINAME) add(s, el("p", "lead", "Gelesen wird: " + DATEINAME + (SCHREIBEN_FREI ? "" : " · Eintragen ist im Portal noch gesperrt.")));
@@ -932,6 +933,83 @@ function kalFehler(e){
   return fehlerText(e);
 }
 
+/* ---------- Aufgaben Liegenschaften (Planner, vorerst nur anzeigen) ----------
+ * Plan im Team „TEAM Liegenschaften“ (Gruppe mailNickname TEAMLiegenschaften). Bevorzugt der Plan mit „Aufgaben“ im Titel,
+ * sonst der erste Plan. Gepflegt wird in Planner (Teams); das Portal zeigt den Stand für die monatliche Ausschusssitzung. */
+var AU = { gruppe: "TEAMLiegenschaften", titel: /aufgaben/i };
+var AU_FILTER = "offen";
+function alle(pfadA){ var out = []; function weiter(u){ return gf(u).then(function(r){ out = out.concat((r && r.value) || []); return r && r["@odata.nextLink"] ? weiter(r["@odata.nextLink"]) : out; }); } return weiter(pfadA); }
+var AuLive = {
+  laden: function(){
+    return gf("/groups?$filter=" + encodeURIComponent("mailNickname eq '" + AU.gruppe + "'") + "&$select=id").then(function(r){
+      var g = r && r.value && r.value[0]; if(!g){ var e = new Error("Gruppe"); e.status = 404; throw e; }
+      return gf("/groups/" + g.id + "/planner/plans?$select=id,title").then(function(p){
+        var plaene = (p && p.value) || [], plan = plaene.filter(function(x){ return AU.titel.test(x.title); })[0] || plaene[0];
+        if(!plan) return {plan: null};
+        return Promise.all([alle("/planner/plans/" + plan.id + "/tasks"), alle("/planner/plans/" + plan.id + "/buckets"), alle("/groups/" + g.id + "/members?$select=id,displayName")])
+          .then(function(x){ var leute = {}; x[2].forEach(function(m){ leute[m.id] = m.displayName; });
+            return {plan: plan, aufgaben: x[0], buckets: x[1], leute: leute}; }); }); }); }
+};
+var AuTest = {
+  laden: function(){ var j = new Date().getFullYear();
+    return Promise.resolve({plan: {id: "p", title: "Liegenschaften – Aufgaben"}, leute: {u1: "Max Muster", u2: "Erika Beispiel"},
+      buckets: [{id: "b1", name: "Sportheim", orderHint: "1"}, {id: "b2", name: "Sportplatz", orderHint: "2"}, {id: "b3", name: "Sonstiges", orderHint: "3"}],
+      aufgaben: [
+        {id: "t1", bucketId: "b1", title: "Beispiel: Feuchtigkeit Treppenhaus prüfen", percentComplete: 50, priority: 1, dueDateTime: (j - 1) + "-12-01T00:00:00Z", assignments: {u1: {}}},
+        {id: "t2", bucketId: "b2", title: "Beispiel: Torbefestigungen erneuern", percentComplete: 0, priority: 5, dueDateTime: null, assignments: {u2: {}}},
+        {id: "t3", bucketId: "b2", title: "Beispiel: Motorsensen warten", percentComplete: 0, priority: 5, dueDateTime: j + 1 + "-03-15T00:00:00Z", assignments: {}},
+        {id: "t4", bucketId: "b3", title: "Beispiel: Bandenwerbung abrechnen", percentComplete: 100, priority: 5, dueDateTime: null, completedDateTime: j + "-10-02T10:00:00Z", assignments: {u1: {}}}]}); }
+};
+function AUQ(){ return TEST ? AuTest : AuLive; }
+function auLink(t){ return "https://tasks.office.com/" + CFG.tenantId + "/Home/Task/" + t.id + "?Type=TaskLink"; }
+function auPlanLink(p){ return "https://tasks.office.com/" + CFG.tenantId + "/Home/PlanViews/" + p.id + "?Type=PlanLink"; }
+function auStatus(t){ return t.percentComplete >= 100 ? "erledigt" : (t.percentComplete > 0 ? "in Arbeit" : "offen"); }
+function auDatum(dt){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt || ""); return m ? m[3] + "." + m[2] + "." + m[1] : ""; }
+function seiteAufgaben(s){
+  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Aufgaben"]]);
+  ladeHinweis(s);
+  AUQ().laden().then(function(D){
+    s.textContent = "";
+    add(s, el("h1", null, "Aufgaben Liegenschaften"));
+    if(!D.plan){ add(s, el("p", "lead", "Es gibt noch keinen Planner-Plan im Team „TEAM Liegenschaften“."),
+      el("div", "hinweis", "Anlegen in Teams: Team „TEAM Liegenschaften“ › Kanal „General“ › „+“ › Planner › neuer Plan „Liegenschaften – Aufgaben“. Danach erscheinen die Aufgaben hier automatisch.")); return; }
+    var heute = new Date().toISOString().slice(0, 10);
+    var lead = el("p", "lead", "Stand aus Planner („" + D.plan.title + "“) für die monatliche Ausschusssitzung. Bearbeitet wird in Planner. ");
+    var pl = el("a", null, "Plan in Planner öffnen"); pl.href = auPlanLink(D.plan); pl.target = "_blank"; pl.rel = "noopener"; add(lead, pl); add(s, lead);
+    var zaehl = {offen: 0, "in Arbeit": 0, erledigt: 0, ueber: 0};
+    D.aufgaben.forEach(function(t){ var st = auStatus(t); zaehl[st]++; if(st !== "erledigt" && t.dueDateTime && t.dueDateTime.slice(0, 10) < heute) zaehl.ueber++; });
+    var c = el("div", "summe"); [["offen", zaehl.offen], ["in Arbeit", zaehl["in Arbeit"]], ["überfällig", zaehl.ueber], ["erledigt", zaehl.erledigt]].forEach(function(k){ add(c, add(el("span"), k[0] + " ", el("b", null, String(k[1])))); }); add(s, c);
+    var filter = el("select"); filter.style.maxWidth = "220px";
+    [["offen", "Alle offenen"], ["ueber", "Überfällig"], ["alle", "Alle"], ["erledigt", "Erledigt"]].forEach(function(o){ var op = el("option", null, o[1]); op.value = o[0]; add(filter, op); });
+    filter.value = AU_FILTER;
+    add(s, add(el("div", "reihe"), add(el("label", "fld", "Anzeigen"), filter), btn("klein", "Drucken für die Sitzung", function(){ window.print(); })));
+    var box = el("div"); add(s, box);
+    var buckets = D.buckets.slice().sort(function(a, b){ return (a.orderHint || "") < (b.orderHint || "") ? -1 : 1; }), namen = {};
+    buckets.forEach(function(b){ namen[b.id] = b.name; });
+    function zeigen(){ box.textContent = ""; AU_FILTER = filter.value; var n = 0;
+      var gruppen = buckets.map(function(b){ return b.id; }).concat(["?"]);
+      gruppen.forEach(function(bid){
+        var liste = D.aufgaben.filter(function(t){ var b = namen[t.bucketId] ? t.bucketId : "?"; if(b !== bid) return false; var st = auStatus(t);
+          if(AU_FILTER === "offen") return st !== "erledigt"; if(AU_FILTER === "erledigt") return st === "erledigt";
+          if(AU_FILTER === "ueber") return st !== "erledigt" && t.dueDateTime && t.dueDateTime.slice(0, 10) < heute; return true; });
+        if(!liste.length) return;
+        liste.sort(function(a, b){ return (a.dueDateTime || "9999") < (b.dueDateTime || "9999") ? -1 : 1; });
+        var k = el("div", "karte"); add(k, el("h2", null, namen[bid] || "Ohne Bucket"));
+        var t = el("table", "tabelle aufg"), tb = el("tbody");
+        add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Zuständig"), el("th", null, "Fällig"), el("th", null, "Stand"))), tb);
+        liste.forEach(function(a){ n++;
+          var st = auStatus(a), ueber = st !== "erledigt" && a.dueDateTime && a.dueDateTime.slice(0, 10) < heute;
+          var wer = Object.keys(a.assignments || {}).map(function(id){ return D.leute[id] || "?"; }).join(", ");
+          var titel = el("a", null, a.title); titel.href = auLink(a); titel.target = "_blank"; titel.rel = "noopener";
+          var tr = el("tr"); add(tr, add(el("td"), a.priority <= 1 ? el("span", "chip offen", "dringend") : null, a.priority <= 1 ? " " : null, titel), el("td", null, wer || "–"),
+            el("td", ueber ? "faellig" : null, auDatum(a.dueDateTime) || "–"), add(el("td"), el("span", "chip " + (st === "erledigt" ? "ok" : (st === "in Arbeit" ? "" : "offen")), st)));
+          add(tb, tr); });
+        add(k, add(el("div", "scroll"), t)); add(box, k); });
+      if(!n) add(box, el("p", "lead", "Keine Aufgaben in dieser Ansicht.")); }
+    filter.addEventListener("change", zeigen); zeigen();
+  }).catch(function(e){ fehlerZeigen(e && (e.status === 403 || e.status === 404) ? "Kein Zugriff auf die Aufgaben. Du musst Mitglied im Team „TEAM Liegenschaften“ sein – bitte bei der Verwaltung melden." : fehlerText(e)); });
+}
+
 /* ---------- Ablauf ---------- */
 function route(){
   /* Im Anmelde-Popup trägt die Adresse den Antwortcode von Microsoft: dort nichts anzeigen. */
@@ -947,6 +1025,7 @@ function route(){
   else if(teile[1] === "ausleihe") seiteAusleihe(s, teile[2]);
   else if(teile[1] === "schluessel") seiteSchluessel(s);
   else if(teile[1] === "inventar") seiteInventar(s);
+  else if(teile[1] === "aufgaben") seiteAufgaben(s);
   else seiteVerwaltung(s);
   window.scrollTo(0, 0);
 }
