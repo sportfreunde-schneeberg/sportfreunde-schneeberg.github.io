@@ -145,3 +145,32 @@ p.lead a{color:var(--green)}
 .btn.ghost.shop:hover{background:rgba(255,255,255,.12)}
 @media (max-width:520px){.btn.ghost.shop .lang{display:none}}
 @media (max-width:520px){.band .in:has(#abmelden:not([hidden])) .shop .txt{display:none}}
+/* Teamwear-Status: Bestellungen gruppiert, Lampen rechts */
+.lampe{display:inline-grid;place-items:center;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px;font-style:normal;font-size:12px;font-weight:800;color:#fff;flex:none}
+.lampe.gross{width:26px;height:26px;margin:0;border:2px solid transparent}
+.lampe.rot{background:#c0392b;box-shadow:0 0 0 3px rgba(192,57,43,.18)}
+.lampe.gelb{background:#e6b422;box-shadow:0 0 0 3px rgba(230,180,34,.22)}
+.lampe.gruen{background:#2f7a3d;box-shadow:0 0 0 3px rgba(47,122,61,.18)}
+.lampe.grau{background:#9aa59c}
+.lampe.aus{background:var(--surface);border-color:#b9c4b8}
+.twliste{margin-top:12px}
+.twbest{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin:0 0 14px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.twkopf{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;padding:10px 14px;background:var(--chip);border-bottom:3px solid var(--kopf);font-size:14px;color:var(--muted)}
+.twkopf > b{font-size:16px;color:var(--ink)}
+.twkopf span b{color:var(--ink)}
+.twpos{display:flex;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.twkopf + .twpos{border-top:none}
+.twtext{flex:1;min-width:0}
+.twart{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
+.twart b{font-size:15.5px}
+.twart span{color:var(--muted);font-size:14px}
+.twmeta{display:flex;gap:12px;font-size:13px;color:var(--muted);margin:2px 0 0 18px}
+.twwarn{margin:6px 0 0 18px;font-size:13px;font-weight:700;color:#8a4b00;background:#fff3c4;border-radius:6px;padding:3px 8px;display:inline-block}
+.twstufen{display:flex;gap:4px;flex:none}
+.twstufe{font:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;padding:4px 2px;width:74px;color:var(--muted);font-size:11.5px;font-weight:600;cursor:pointer;border-radius:8px}
+.twstufe:not(:disabled):hover{background:var(--chip)}
+.twstufe:disabled{cursor:default}
+.twstufe[aria-pressed=true]{color:var(--ink)}
+.twstufe:focus-visible{outline:3px solid var(--bandgold);outline-offset:1px}
+@media (max-width:700px){.twpos{flex-direction:column;align-items:stretch}.twstufen{justify-content:space-between}.twstufe{width:auto;flex:1}}
+@media (prefers-color-scheme:dark){.twwarn{background:#3d3216;color:#f3d58a}}
