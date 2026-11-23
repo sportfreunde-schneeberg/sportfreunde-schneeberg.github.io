@@ -654,6 +654,9 @@ function seiteInventar(s){
  * Die Datei nie ersetzen (Power Automate hängt an der Datei-ID). */
 var TW = { gruppe: "Vorstandschaft", datei: "General/Teamwear/Teamwear_Bestellungen.xlsx" };
 var STUFEN = [["Bestellt", 14], ["Geliefert", 15], ["Ausgehändigt", 16], ["Bezahlt", 17], ["Storniert", 18]];
+/* „Geliefert“ wird im Portal nicht mehr gezeigt (Entscheidung 23.11.2026, läuft intern). Damit die Status-Formel in Spalte T
+   stimmt, setzt „Ausgehändigt“ die Spalte Geliefert (P) automatisch mit. */
+var TW_SICHTBAR = [0, 2, 3, 4];
 var twIds = null, twSess = null;
 function twFinden(){
   if(twIds) return Promise.resolve(twIds);
@@ -685,11 +688,11 @@ function darfTeamwearSchreiben(){ return darf("teamwear"); }
 function twZeilen(w){ var out = []; for(var z = ERSTE; z <= w.length; z++){ var art = txt(zelle(w, z, 7)); if(!art) continue;
   out.push({zeile: z, eingang: zelle(w, z, 0), nr: txt(zelle(w, z, 1)), name: [txt(zelle(w, z, 3)), txt(zelle(w, z, 2))].filter(Boolean).join(" "), mannschaft: txt(zelle(w, z, 6)),
     artikel: art, groesse: txt(zelle(w, z, 8)), anzahl: zahl(zelle(w, z, 9)), initialen: txt(zelle(w, z, 10)), einzel: zahl(zelle(w, z, 11)), aufpreis: zahl(zelle(w, z, 12)), summe: zahl(zelle(w, z, 13)),
-    stufen: STUFEN.map(function(s){ return /^ja/i.test(txt(zelle(w, z, s[1]))); }), status: txt(zelle(w, z, 19)), bem: txt(zelle(w, z, 20))}); }
+    stufen: STUFEN.map(function(s){ return /^ja/i.test(txt(zelle(w, z, s[1]))); }), status: txt(zelle(w, z, 19)).replace(/^geliefert$/, "bestellt"), bem: txt(zelle(w, z, 20))}); }
   return out; }
 /* Status wie die Formel in Spalte T, damit die Anzeige nach dem Klicken sofort stimmt. */
 function twStatus(st){ if(st[4]) return "storniert"; if(st[0] && st[1] && st[2] && st[3]) return "abgeschlossen";
-  if(!st[0]) return "zu bestellen"; if(!st[1]) return "bestellt"; if(!st[2]) return "geliefert"; if(!st[3]) return "Zahlung offen"; return "abgeschlossen"; }
+  if(!st[0]) return "zu bestellen"; if(!st[2]) return "bestellt"; if(!st[3]) return "Zahlung offen"; return "abgeschlossen"; }
 var TW_FILTER = "offen";
 /* Lampenfarbe je Status: rot = noch nichts passiert, gelb = läuft, grün = fertig, grau = storniert */
 function twLampe(st){ return st === "abgeschlossen" ? "gruen" : (st === "storniert" ? "grau" : (st === "zu bestellen" ? "rot" : "gelb")); }
@@ -717,9 +720,9 @@ function seiteTeamwear(s){
     add(s, el("h1", null, "Teamwear-Status"),
       el("p", "lead", darf ? "Du kannst die Stufen hier abhaken. Jeder Klick wird sofort in der Excel gespeichert." : "Stand aller Bestellungen. Abhaken kann nur der Teamwear-Verantwortliche."));
     var zaehl = {}; zeilen.forEach(function(r){ zaehl[r.status] = (zaehl[r.status] || 0) + 1; });
-    var c = el("div", "summe"); ["zu bestellen", "bestellt", "geliefert", "Zahlung offen", "abgeschlossen", "storniert"].forEach(function(k){ add(c, add(el("span"), el("i", "lampe " + twLampe(k)), k + " ", el("b", null, String(zaehl[k] || 0)))); }); add(s, c);
+    var c = el("div", "summe"); ["zu bestellen", "bestellt", "Zahlung offen", "abgeschlossen", "storniert"].forEach(function(k){ add(c, add(el("span"), el("i", "lampe " + twLampe(k)), k + " ", el("b", null, String(zaehl[k] || 0)))); }); add(s, c);
     var filter = el("select"); filter.style.maxWidth = "220px";
-    [["offen", "Alle offenen"], ["alle", "Alle"], ["zu bestellen", "zu bestellen"], ["bestellt", "bestellt"], ["geliefert", "geliefert"], ["Zahlung offen", "Zahlung offen"], ["abgeschlossen", "abgeschlossen"], ["storniert", "storniert"], ["pruefen", "Preis prüfen"]]
+    [["offen", "Alle offenen"], ["alle", "Alle"], ["zu bestellen", "zu bestellen"], ["bestellt", "bestellt"], ["Zahlung offen", "Zahlung offen"], ["abgeschlossen", "abgeschlossen"], ["storniert", "storniert"], ["pruefen", "Preis prüfen"]]
       .forEach(function(o){ var op = el("option", null, o[1]); op.value = o[0]; add(filter, op); });
     filter.value = TW_FILTER;
     var such = el("input", "suche"); such.type = "search"; such.placeholder = "Name, Artikel oder Mannschaft …";
@@ -748,8 +751,8 @@ function seiteTeamwear(s){
         add(el("div", "twmeta"), el("span", null, r.status || "–"), el("span", null, euro(r.summe))));
       if(r.pruefen) add(links, el("div", "twwarn", "⚠ Preis prüfen: " + r.pruefen));
       if(r.bem) add(links, el("div", "twmeta", r.bem));
-      var st = el("div", "twstufen"), naechste = r.stufen.slice(0, 4).indexOf(false);
-      STUFEN.forEach(function(s2, i){
+      var st = el("div", "twstufen"), naechste = [0, 2, 3].filter(function(k){ return !r.stufen[k]; })[0];
+      TW_SICHTBAR.forEach(function(i){ var s2 = STUFEN[i];
         var an = r.stufen[i], farbe = i === 4 ? (an ? "rot" : "aus") : (an ? "gruen" : (r.stufen[4] ? "aus" : (i === naechste ? "gelb" : "aus")));
         var bt = el("button", "twstufe"); bt.type = "button"; bt.disabled = !darf;
         add(bt, el("i", "lampe gross " + farbe, an ? (i === 4 ? "✕" : "✓") : ""), el("span", null, s2[0]));
@@ -765,6 +768,7 @@ function seiteTeamwear(s){
         var jetzt = twZeilen(w2).filter(function(x){ return x.zeile === r.zeile; })[0];
         if(!jetzt || jetzt.nr !== r.nr || jetzt.artikel !== r.artikel) throw new Error("Die Zeile hat sich in der Excel verändert. Bitte die Seite neu laden.");
         var sp = spalte(STUFEN[i][1]);
+        if(i === 2){ neu[1] = neu[2]; return TWQ().schreiben(spalte(STUFEN[1][1]) + r.zeile + ":" + sp + r.zeile, [[neu[2] ? "Ja" : "", neu[2] ? "Ja" : ""]]); }
         return TWQ().schreiben(sp + r.zeile + ":" + sp + r.zeile, [[neu[i] ? "Ja" : ""]]);
       }).then(function(){ r.stufen = neu; r.status = twStatus(neu); zeigeToast(r.artikel + ": " + STUFEN[i][0] + (neu[i] ? " ✓" : " entfernt")); pos.replaceWith(twPosition(r)); })
         .catch(function(e){ pos.querySelectorAll(".twstufe").forEach(function(b){ b.disabled = false; }); add(pos, el("div", "fehler", e && e.status ? twFehler(e) : (e.message || "Fehler beim Speichern."))); });
