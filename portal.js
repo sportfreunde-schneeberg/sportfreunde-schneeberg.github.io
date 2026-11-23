@@ -276,7 +276,7 @@ function seiteStart(s){
   var k = el("div", "kacheln");
   add(k, kachel("🏠", "Verwaltung", "Kabinenreinigung, Ausleihliste, Schlüssel und Inventar", "#/verwaltung", true),
     kachel("🎉", "Festausschuss", "Festplaner 100 Jahre Sportfreunde (2.–5. Juni 2028)", "/festplaner/", true),
-    kachel("👕", "Teamwear-Status", "Bestellungen und ihr Stand: bestellt, geliefert, ausgehändigt, bezahlt", "#/teamwear", true),
+    kachel("👕", "Teamwear-Status", "Bestellungen und ihr Stand: bestellt, ausgehändigt, bezahlt", "#/teamwear", true),
     kachel("📄", "Protokolle", "Ausschusssitzungen, Klausurtagungen und Generalversammlung nach Jahr und Monat", "#/protokolle", true),
     kachel("📅", "Vereinskalender", "Termine wie Ausschusssitzungen ansehen, eintragen, ändern und löschen", "#/kalender", true));
   add(s, k);
