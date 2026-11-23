@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Vereinsausschuss-Portal · Sportfreunde Schneeberg 1928 e. V.</title>
+<meta name="description" content="Vereinsausschuss-Portal der Sportfreunde Schneeberg 1928 e. V. – Anmeldung mit dem Vereinskonto.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="img/wappen.png">
+<link rel="stylesheet" href="portal.css?v=202611231655">
+</head>
+<body>
+<header class="band">
+  <div class="in">
+    <a class="marke" href="#/"><img src="img/wappen.png" alt="Wappen Sportfreunde Schneeberg 1928 e. V." width="44" height="44"><span><small>SPORTFREUNDE SCHNEEBERG 1928 E. V.</small><b>Vereinsausschuss-Portal</b></span></a>
+    <span class="sp"></span>
+    <span class="wer" id="wer"></span>
+    <button type="button" class="btn ghost" id="abmelden" hidden>Abmelden</button>
+  </div>
+</header>
+<nav class="pfad in" id="pfad" aria-label="Brotkrumen"></nav>
+<main class="in" id="seite" aria-live="polite"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<footer><div class="in">Sportfreunde Schneeberg 1928 e. V. · Anmeldung nur mit Vereinskonto · Die Daten bleiben in den Excel-Dateien des Vereins in Teams.</div></footer>
+<script src="lib/msal-browser-2.38.4.min.js"></script>
+<script src="portal.js?v=202611231655"></script>
+</body>
+</html>

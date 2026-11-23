@@ -1,0 +1,120 @@
+/* Farben wie Festplaner und Teamwear-Shop: Vereinsgrün mit Goldakzent, hell und dunkel. */
+:root{--bg:#f4f6f1;--surface:#fff;--sunken:#eaeee6;--ink:#16241b;--muted:#5a6a60;--line:#d9dfd6;--band:#1f4d2e;--bandgold:#e6b422;--green:#1f4d2e;--gold:#9a7212;--err:#b3402f;--ok:#2f7a3d;--warn:#c8642c;--chip:#eef2ec}
+@media (prefers-color-scheme:dark){:root{--bg:#111813;--surface:#19231c;--sunken:#0d130f;--ink:#e7eee8;--muted:#9bab9f;--line:#2b392f;--green:#5fae7a;--gold:#e0b54a;--chip:#223027}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.in{max-width:1040px;margin:0 auto;padding:0 16px}
+.band{background:var(--band);color:#fff;border-bottom:4px solid var(--bandgold)}
+.band .in{display:flex;align-items:center;gap:12px;min-height:68px}
+.marke{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none}
+.marke img{width:44px;height:44px;border-radius:50%;background:#fff}
+.marke small{display:block;font-size:11px;letter-spacing:.12em;color:var(--bandgold);font-weight:700}
+.marke b{font-size:19px}
+.sp{flex:1}
+.wer{font-size:14px;opacity:.9;text-align:right}
+.pfad{display:flex;gap:6px;flex-wrap:wrap;font-size:14px;color:var(--muted);padding-top:14px}
+.pfad a{color:var(--green)}
+main{padding-top:8px;padding-bottom:48px;min-height:60vh}
+h1{font-size:26px;margin:14px 0 4px}
+h2{font-size:20px;margin:22px 0 8px}
+p.lead{color:var(--muted);margin:0 0 18px}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:13px;padding:18px 0}
+.btn{font:inherit;font-weight:600;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 16px;cursor:pointer;min-height:44px}
+.btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+.btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+.btn.klein{padding:6px 12px;min-height:36px;font-size:14px}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--bandgold);outline-offset:2px}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin:12px 0}
+.kachel{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;text-decoration:none;color:var(--ink);min-height:130px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.kachel:hover{border-color:var(--green)}
+.kachel .sym{font-size:28px;line-height:1}
+.kachel b{font-size:18px}
+.kachel span{color:var(--muted);font-size:14px}
+.kachel.gross{min-height:170px}
+.kachel.gross b{font-size:22px}
+.karte{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+.willkommen{text-align:center;padding:36px 16px}
+.willkommen img{width:110px;height:110px;border-radius:50%;background:#fff}
+.hinweis{background:var(--chip);border-left:4px solid var(--gold);padding:10px 14px;border-radius:8px;font-size:14px;color:var(--ink);margin:12px 0}
+.fehler{background:#fbe9e6;border-left:4px solid var(--err);color:#5a1d14;padding:12px 14px;border-radius:8px;margin:12px 0}
+@media (prefers-color-scheme:dark){.fehler{background:#3a1d18;color:#f5d6cf}}
+.tabelle{width:100%;border-collapse:collapse;font-size:15px}
+.tabelle th,.tabelle td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.tabelle th{font-size:13px;color:var(--muted);font-weight:600}
+.tabelle td.z,.tabelle th.z{text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;background:var(--chip);color:var(--ink);white-space:nowrap}
+.chip.ok{background:#dcefe0;color:#1d5a2b}.chip.offen{background:#fbe3d6;color:#7a3413}.chip.grau{background:var(--sunken);color:var(--muted)}
+@media (prefers-color-scheme:dark){.chip.ok{background:#1f3a26;color:#bfe6c9}.chip.offen{background:#3d2516;color:#f3c9ac}}
+.formular{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;align-items:end}
+.formular .w2{grid-column:span 2}
+@media (max-width:420px){.formular .w2{grid-column:auto}}
+label.fld{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:600}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:44px;width:100%}
+input[type=checkbox]{width:22px;height:22px;min-height:0}
+.reihe{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.summe{display:flex;gap:18px;flex-wrap:wrap;font-size:15px;color:var(--muted);margin-top:10px}
+.summe b{color:var(--ink)}
+.buchung{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;background:var(--surface)}
+.buchung.abgesagt{opacity:.6}
+.buchung .kopf{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.buchung .kopf b{font-size:17px}
+.buchung ul{list-style:none;padding:0;margin:8px 0}
+.buchung li{display:flex;gap:10px;justify-content:space-between;border-top:1px dashed var(--line);padding:6px 0;font-size:15px}
+.pos{display:grid;grid-template-columns:2fr .8fr 1fr 2fr auto;gap:8px;align-items:end;margin:8px 0}
+/* Teamwear-Status: vier Schritte mit Abhak-Punkten und Verbindungslinie, Storno abgesetzt */
+.stufen{display:flex;align-items:flex-start;gap:0;margin-top:10px;flex-wrap:wrap}
+.schritt{display:flex;align-items:flex-start;flex:1 1 0;min-width:0}
+.schritt .linie{flex:1;height:3px;background:var(--line);margin:17px 4px 0;border-radius:2px;min-width:10px}
+.schritt.an .linie{background:#2f7a3d}
+.stufe{font:inherit;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;padding:4px 2px;color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;min-width:64px}
+.stufe .kreis{width:28px;height:28px;border-radius:50%;border:2px solid #b9c4b8;background:var(--surface);display:grid;place-items:center;font-size:15px;font-weight:800;color:transparent;transition:all .2s}
+.stufe:not(:disabled):hover .kreis{border-color:var(--green)}
+.stufe.an{color:var(--ink)}
+.stufe.an .kreis{background:#2f7a3d;border-color:#2f7a3d;color:#fff}
+.stufe.storno{margin-left:14px}
+.stufe.storno.an .kreis{background:#b3402f;border-color:#b3402f}
+.stufe:disabled{cursor:default}
+.stufe:focus-visible{outline:3px solid var(--bandgold);outline-offset:2px;border-radius:8px}
+@media (max-width:520px){.stufe{min-width:54px;font-size:11.5px}.stufe.storno{margin-left:6px}}
+@media (max-width:640px){.pos{grid-template-columns:1fr 1fr}.pos .breit{grid-column:span 2}}
+.suche{max-width:360px}
+.punkt{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid var(--line);vertical-align:middle;margin-right:6px}
+.laden{color:var(--muted);padding:30px 0}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(120%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:10px;font-weight:600;transition:transform .25s,visibility .25s;max-width:calc(100% - 32px);z-index:9;visibility:hidden}
+.toast.on{transform:translateX(-50%) translateY(0);visibility:visible}
+dialog{border:none;border-radius:14px;padding:0;max-width:560px;width:calc(100% - 32px);background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .karte{margin:0;border:none}
+[hidden]{display:none!important}
+
+/* ---- Tabellen und Karten im Stil der Liegenschaften-GUI v1.4 ----
+   dunkelgrüner Tabellenkopf, abwechselnd hellgrüne Zeilen, grüne Kartenüberschriften, Kassen-Kästchen */
+:root{--kopf:#1E5B2E;--zebra:#EAF4EB}
+@media (prefers-color-scheme:dark){:root{--kopf:#1f4d2e;--zebra:#1c2a20}}
+.tabelle{font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;border-collapse:separate;border-spacing:0}
+.tabelle th{background:var(--kopf);color:#fff;font-size:12.5px;font-weight:700;padding:9px 8px;border-bottom:none;white-space:nowrap}
+.tabelle td{padding:8px;border-bottom:1px solid var(--line)}
+.tabelle tbody tr:nth-child(even) td{background:var(--zebra)}
+.tabelle tbody tr:last-child td{border-bottom:none}
+.tabelle tr.gruppe td{border-top:2px solid var(--kopf)}
+.scroll{border-radius:10px}
+.karte h2,.karte > b:first-child{color:var(--green)}
+.summe{gap:10px}
+.summe > span{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13.5px}
+.summe > span b{color:var(--green)}
+/* Teamwear-Karte: Angaben als schlichte Zeile, nicht als Kästchen */
+.meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px;color:var(--muted);margin-top:6px}
+.meta b{color:var(--ink)}
+/* Kopf auf schmalen Bildschirmen kompakter */
+@media (max-width:520px){
+  .band .in{min-height:58px;gap:10px}
+  .marke img{width:36px;height:36px}
+  .marke small{display:none}
+  .marke b{font-size:16px}
+  .wer{display:none}
+  .btn.ghost{padding:6px 10px;min-height:36px;font-size:13px}
+  h1{font-size:22px}
+}
