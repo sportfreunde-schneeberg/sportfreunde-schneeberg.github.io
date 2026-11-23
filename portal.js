@@ -23,7 +23,7 @@ var CFG = {
 };
 /* Hauptschalter fürs Schreiben (false = Portal nur lesend). Freigegeben nach Prüfung der Excel v1.4. */
 var SCHREIBEN_FREI = true; /* freigegeben 23.11.2026 nach Test (Kabinenreinigung Zeile 35 geschrieben, geprüft, geleert) */
-var SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All"];
+var SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Calendars.ReadWrite", "Calendars.ReadWrite.Shared"];
 var GR = "https://graph.microsoft.com/v1.0";
 var ERSTE = 5; /* erste Datenzeile */
 var MONATE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
@@ -79,7 +79,7 @@ function anmelden(){
   pca.loginPopup({scopes: SCOPES, prompt: "select_account"}).then(function(r){ kontoSetzen(r.account).then(function(){ kopfzeile(); route(); }); })
     .catch(function(e){ if(e && e.errorCode === "user_cancelled") return; fehlerZeigen("Die Anmeldung hat nicht geklappt." + (e && e.errorMessage ? " (" + e.errorMessage.split("\n")[0] + ")" : "")); });
 }
-function abmelden(){ var k = konto; konto = null; kontoHash = ""; ids = null; sess = null; DATEN = null; if(pca && k) pca.logoutPopup({account: k}).catch(function(){}); kopfzeile(); location.hash = "#/"; route(); }
+function abmelden(){ var k = konto; konto = null; kontoHash = ""; ids = null; sess = null; DATEN = null; kalInfo = null; prDrive = null; if(pca && k) pca.logoutPopup({account: k}).catch(function(){}); kopfzeile(); location.hash = "#/"; route(); }
 function angemeldet(){ return TEST || !!konto; }
 function kopfzeile(){ $("wer").textContent = TEST ? "Testmodus" : (konto ? (konto.name || konto.username || "") : ""); $("abmelden").hidden = !konto; }
 
@@ -89,7 +89,7 @@ function warte(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 function gf(pfad, o, versuch){
   o = o || {}; versuch = versuch || 0;
   return token().then(function(t){
-    var hd = {Authorization: "Bearer " + t};
+    var hd = {Authorization: "Bearer " + t}; if(o.headers) Object.keys(o.headers).forEach(function(k){ hd[k] = o.headers[k]; });
     if(o.body) hd["Content-Type"] = "application/json";
     if(o.sitzung) hd["workbook-session-id"] = o.sitzung; else if(sess && o.wb) hd["workbook-session-id"] = sess;
     return fetch(pfad.indexOf("https://") === 0 ? pfad : GR + pfad, {method: o.method || "GET", headers: hd, body: o.body ? JSON.stringify(o.body) : undefined});
@@ -272,7 +272,9 @@ function seiteStart(s){
   var k = el("div", "kacheln");
   add(k, kachel("🏠", "Verwaltung", "Kabinenreinigung, Ausleihliste, Schlüssel und Inventar", "#/verwaltung", true),
     kachel("🎉", "Festausschuss", "Festplaner 100 Jahre Sportfreunde (2.–5. Juni 2028)", "/festplaner/", true),
-    kachel("👕", "Teamwear-Status", "Bestellungen und ihr Stand: bestellt, geliefert, ausgehändigt, bezahlt", "#/teamwear", true));
+    kachel("👕", "Teamwear-Status", "Bestellungen und ihr Stand: bestellt, geliefert, ausgehändigt, bezahlt", "#/teamwear", true),
+    kachel("📄", "Protokolle", "Ausschusssitzungen, Klausurtagungen und Generalversammlung nach Jahr und Monat", "#/protokolle", true),
+    kachel("📅", "Vereinskalender", "Termine wie Ausschusssitzungen ansehen, eintragen, ändern und löschen", "#/kalender", true));
   add(s, k);
 }
 function seiteVerwaltung(s){
@@ -738,6 +740,198 @@ function twFehler(e){
   return fehlerText(e);
 }
 
+/* ---------- Protokolle ----------
+ * Nur lesen. Quelle: Team „Sportfreunde Schneeberg 1928 e.V.“, Dokumente › Schriftführer:
+ *   05_Protokolle/Ausschusssitzungen/<Jahr>/, 05_Protokolle/Klausurtagungen/ (Jahr im Dateinamen),
+ *   04_Generalversammlungen/Generalversammlung <Jahr>/.
+ * Gezeigt werden nur Dateien mit „Protokoll“ im Namen (keine Einladungen, Vorlagen, Kopien). PDF vor Word. */
+var PR = { site: "/sites/SportfreundeSchneeberg1928e.V", basis: "Schriftführer" };
+var PR_MON = ["januar","februar","märz","april","mai","juni","juli","august","september","oktober","november","dezember"];
+var prDrive = null;
+function prFinden(){ if(prDrive) return Promise.resolve(prDrive);
+  return gf("/sites/" + CFG.host + ":" + PR.site + "?$select=id").then(function(s){ return gf("/sites/" + s.id + "/drive?$select=id"); }).then(function(d){ return prDrive = d.id; }); }
+function prKinder(pfadTeil){
+  return prFinden().then(function(d){ return gf("/drives/" + d + "/root:/" + pfadK(PR.basis + "/" + pfadTeil) + ":/children?$select=name,webUrl,folder,file&$top=999"); })
+    .then(function(r){ return (r && r.value) || []; }).catch(function(e){ if(e && e.status === 404) return []; throw e; }); }
+var PrLive = {
+  jahre: function(){ return Promise.all([prKinder("05_Protokolle/Ausschusssitzungen"), prKinder("04_Generalversammlungen"), prKinder("05_Protokolle/Klausurtagungen")]).then(function(r){
+    var j = {}; r[0].forEach(function(x){ if(x.folder && /^\d{4}$/.test(x.name)) j[x.name] = 1; });
+    r[1].forEach(function(x){ var m = /(\d{4})/.exec(x.name); if(x.folder && m) j[m[1]] = 1; });
+    r[2].forEach(function(x){ var y = prJahrAusName(x.name); if(x.file && y) j[y] = 1; });
+    return Object.keys(j).map(Number).sort(function(a, b){ return b - a; }); }); },
+  dateien: function(jahr){ return Promise.all([prKinder("05_Protokolle/Ausschusssitzungen/" + jahr), prKinder("04_Generalversammlungen/Generalversammlung " + jahr), prKinder("05_Protokolle/Klausurtagungen")]).then(function(r){
+    var out = [];
+    r[0].forEach(function(x){ if(x.file) out.push({name: x.name, url: x.webUrl, art: /klausur|tagung/i.test(x.name) ? "Klausurtagung" : "Ausschusssitzung"}); });
+    r[1].forEach(function(x){ if(x.file) out.push({name: x.name, url: x.webUrl, art: "Generalversammlung"}); });
+    r[2].forEach(function(x){ if(x.file && prJahrAusName(x.name) === jahr) out.push({name: x.name, url: x.webUrl, art: "Klausurtagung"}); });
+    return out; }); }
+};
+var PrTest = {
+  jahre: function(){ return Promise.resolve([2026, 2025, 2017]); },
+  dateien: function(j){ var t = j === 2017 ? ["Protokolle 2017.pdf"] : ["01_Ausschusssitzung_Protokoll_Januar_" + j + ".pdf", "01_Ausschusssitzung_Protokoll_Januar_" + j + ".docx", "02_Ausschusssitzung_Protokoll_März_" + j + ".docx",
+      "05_Einladung_Juli Sitzung.docx", "Vorlage Einladung.docx", "03_Protokoll_April – Kopie.docx", "06_Ausschusssitzung_Protokoll_September_" + j + ".pdf", "Klausurtagung_Protokoll_November_" + j + ".pdf"];
+    var out = t.map(function(n){ return {name: n, url: "#", art: /klausur/i.test(n) ? "Klausurtagung" : "Ausschusssitzung"}; });
+    if(j === 2026){ out.push({name: "Protokoll_Generalversammlung_09.10.2026.pdf", url: "#", art: "Generalversammlung"}); out.push({name: j + "_Klausurtagung_Protokoll_November.pdf", url: "#", art: "Klausurtagung"}); }
+    return Promise.resolve(out); }
+};
+function PRQ(){ return TEST ? PrTest : PrLive; }
+function prJahrAusName(n){ var m = /^(\d{4})[_ -]/.exec(n) || /\d{1,2}[._]\d{1,2}[._](\d{4})/.exec(n) || /_(\d{4})\.\w+$/.exec(n); return m ? +m[1] : null; }
+function prMonat(n){ var l = n.toLowerCase().replace("july", "juli");
+  for(var i = 0; i < 12; i++) if(l.indexOf(PR_MON[i]) > -1) return i;
+  var m = /(\d{1,2})[._](\d{1,2})[._]\d{4}/.exec(l); if(m && +m[2] >= 1 && +m[2] <= 12) return +m[2] - 1;
+  return null; }
+/* Dateien eines Jahres zu Einträgen bündeln: je Monat und Art ein Eintrag, PDF bevorzugt. */
+function prEintraege(dateien){
+  var g = {};
+  dateien.forEach(function(x){
+    if(!/protokoll/i.test(x.name) || /kopie|vorlage|einladung/i.test(x.name)) return;
+    if(!/\.(pdf|docx?)$/i.test(x.name)) return;
+    var mon = prMonat(x.name), key = (mon == null ? "J" : mon) + "|" + x.art;
+    var e = g[key] = g[key] || {monat: mon, art: x.art, pdf: null, word: null};
+    if(/\.pdf$/i.test(x.name)){ if(!e.pdf) e.pdf = x; } else if(!e.word) e.word = x; });
+  return Object.keys(g).map(function(k){ return g[k]; });
+}
+var PR_JAHR = null;
+function seiteProtokolle(s, jahrTeil){
+  pfad([["Start", "#/"], ["Protokolle"]]);
+  ladeHinweis(s);
+  PRQ().jahre().then(function(jahre){
+    s.textContent = "";
+    if(!jahre.length){ add(s, el("h1", null, "Protokolle"), el("p", "lead", "Keine Protokolle gefunden.")); return; }
+    var jahr = +jahrTeil || PR_JAHR || jahre[0]; if(jahre.indexOf(jahr) < 0) jahr = jahre[0]; PR_JAHR = jahr;
+    pfad([["Start", "#/"], ["Protokolle", "#/protokolle"], [String(jahr)]]);
+    add(s, el("h1", null, "Protokolle " + jahr), el("p", "lead", "Ausschusssitzungen, Klausurtagungen und Generalversammlung aus dem Ordner des Schriftführers. Ein Klick öffnet das Protokoll."));
+    var nav = el("div", "jahre"); jahre.forEach(function(j){ var a = el("a", "chip" + (j === jahr ? " ok" : ""), String(j)); a.href = "#/protokolle/" + j; if(j === jahr) a.setAttribute("aria-current", "page"); add(nav, a); }); add(s, nav);
+    var box = el("div"); add(s, box); add(box, el("div", "laden", "Protokolle werden geladen …"));
+    return PRQ().dateien(jahr).then(function(dateien){
+      box.textContent = "";
+      var ein = prEintraege(dateien), rang = {Ausschusssitzung: 0, Klausurtagung: 1, Generalversammlung: 2};
+      ein.sort(function(a, b){ return rang[a.art] - rang[b.art]; });
+      var t = el("table", "tabelle"), tb = el("tbody");
+      add(t, add(el("thead"), add(el("tr"), el("th", null, "Monat"), el("th", null, "Protokoll"))), tb);
+      ein.filter(function(e){ return e.monat == null; }).forEach(function(e){ add(tb, prZeile("Ganzes Jahr", [e])); });
+      for(var m = 0; m < 12; m++){ var dieser = ein.filter(function(e){ return e.monat === m; }); add(tb, prZeile(MONATE[m], dieser)); }
+      add(box, add(el("div", "scroll"), t));
+    });
+  }).catch(function(e){ fehlerZeigen(prFehler(e)); });
+}
+function prZeile(titel, eintraege){
+  var tr = el("tr" + ""), td = el("td");
+  if(!eintraege.length){ tr.className = "leer"; add(td, el("span", "grau", "keine Sitzung")); }
+  eintraege.forEach(function(e){ var d = e.pdf || e.word, a = el("a", "doc", e.monat == null ? "Alle Protokolle des Jahres" : e.art); a.href = d.url; a.target = "_blank"; a.rel = "noopener";
+    add(td, add(el("div", "docreihe"), a, el("span", "chip" + (e.pdf ? "" : " grau"), e.pdf ? "PDF" : "Word"), e.art !== "Ausschusssitzung" ? el("span", "chip offen", "Sondertermin") : null)); });
+  add(tr, el("td", null, titel), td); return tr;
+}
+function prFehler(e){
+  if(e && (e.status === 403 || e.status === 404)) return "Kein Zugriff auf die Protokolle. Du musst Mitglied im Team „Sportfreunde Schneeberg 1928 e.V.“ sein – bitte bei der Verwaltung melden.";
+  return fehlerText(e);
+}
+
+/* ---------- Vereinskalender ----------
+ * Outlook-Kalender „Vereinskalender_Spfr1928“. Er ist in Outlook für die Ausschussmitglieder freigegeben;
+ * das Portal findet ihn unter den eigenen Kalendern des angemeldeten Kontos (nach Annahme der Freigabe).
+ * Anlegen, Ändern und Löschen nur, wenn Outlook dem Konto „Kann bearbeiten“ gibt (canEdit). Keine Einladungen. */
+var KAL = { name: /vereinskalender/i, zone: "W. Europe Standard Time" };
+var kalInfo = null, KAL_MONAT = null;
+var KalLive = {
+  finden: function(){ if(kalInfo) return Promise.resolve(kalInfo);
+    return gf("/me/calendars?$select=id,name,canEdit&$top=200").then(function(r){ var c = ((r && r.value) || []).filter(function(x){ return KAL.name.test(x.name); })[0];
+      if(!c){ var e = new Error("Kalender"); e.kal = true; throw e; } return kalInfo = {id: c.id, name: c.name, darf: !!c.canEdit}; }); },
+  termine: function(von, bis){ return KalLive.finden().then(function(k){
+    return gf("/me/calendars/" + encodeURIComponent(k.id) + "/calendarView?startDateTime=" + von + "&endDateTime=" + bis + "&$select=id,subject,start,end,isAllDay,location,bodyPreview&$orderby=start/dateTime&$top=500", {headers: {Prefer: 'outlook.timezone="' + KAL.zone + '"'}}); })
+    .then(function(r){ return (r && r.value) || []; }); },
+  speichern: function(id, daten){ return KalLive.finden().then(function(k){ var p = "/me/calendars/" + encodeURIComponent(k.id) + "/events";
+    return id ? gf(p + "/" + encodeURIComponent(id), {method: "PATCH", body: daten}) : gf(p, {method: "POST", body: daten}); }); },
+  loeschen: function(id){ return KalLive.finden().then(function(k){ return gf("/me/calendars/" + encodeURIComponent(k.id) + "/events/" + encodeURIComponent(id), {method: "DELETE"}); }); }
+};
+var KalTest = {
+  liste: null,
+  finden: function(){ return Promise.resolve({id: "test", name: "Vereinskalender_Spfr1928", darf: (/[?&]rolle=([a-z]+)/.exec(location.search) || [])[1] !== "gast"}); },
+  termine: function(von, bis){ if(!KalTest.liste){ var j = new Date().getFullYear(), m = pad(new Date().getMonth() + 1);
+      KalTest.liste = [{id: "1", subject: "Ausschusssitzung", start: {dateTime: j + "-" + m + "-03T19:30:00"}, end: {dateTime: j + "-" + m + "-03T21:30:00"}, isAllDay: false, location: {displayName: "Sportheim"}, bodyPreview: "Beispieldaten"},
+        {id: "2", subject: "Arbeitseinsatz Sportplatz", start: {dateTime: j + "-" + m + "-14T00:00:00"}, end: {dateTime: j + "-" + m + "-15T00:00:00"}, isAllDay: true, location: {displayName: ""}, bodyPreview: ""}]; }
+    window.__kal = window.__kal || [];
+    return Promise.resolve(KalTest.liste.filter(function(t){ return t.start.dateTime.slice(0, 10) >= von.slice(0, 10) && t.start.dateTime.slice(0, 10) < bis.slice(0, 10); }).sort(function(a, b){ return a.start.dateTime < b.start.dateTime ? -1 : 1; })); },
+  speichern: function(id, d){ window.__kal = window.__kal || []; window.__kal.push({aktion: id ? "ändern" : "anlegen", id: id, daten: d});
+    var t = {id: id || String(Date.now()), subject: d.subject, start: d.start, end: d.end, isAllDay: d.isAllDay, location: d.location, bodyPreview: d.body ? d.body.content : ""};
+    KalTest.liste = KalTest.liste.filter(function(x){ return x.id !== id; }).concat([t]); return Promise.resolve(t); },
+  loeschen: function(id){ window.__kal.push({aktion: "löschen", id: id}); KalTest.liste = KalTest.liste.filter(function(x){ return x.id !== id; }); return Promise.resolve(); }
+};
+function KALQ(){ return TEST ? KalTest : KalLive; }
+var WT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+function kalDatum(dt){ var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ""); return m ? {j: +m[1], mo: +m[2], t: +m[3], h: m[4], mi: m[5], iso: m[1] + "-" + m[2] + "-" + m[3], zeit: m[4] + ":" + m[5]} : null; }
+function isoPlus(iso, tage){ var d = isoZuDatum(iso); d.setDate(d.getDate() + tage); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function seiteKalender(s, monatTeil){
+  pfad([["Start", "#/"], ["Vereinskalender"]]);
+  ladeHinweis(s);
+  var heute = new Date(), mm = /^(\d{4})-(\d{2})$/.exec(monatTeil || "") || /^(\d{4})-(\d{2})$/.exec(KAL_MONAT || "");
+  var j = mm ? +mm[1] : heute.getFullYear(), mo = mm ? +mm[2] : heute.getMonth() + 1; KAL_MONAT = j + "-" + pad(mo);
+  var von = j + "-" + pad(mo) + "-01T00:00:00", nj = mo === 12 ? j + 1 : j, nm = mo === 12 ? 1 : mo + 1, bis = nj + "-" + pad(nm) + "-01T00:00:00";
+  var vj = mo === 1 ? j - 1 : j, vm = mo === 1 ? 12 : mo - 1;
+  KALQ().finden().then(function(k){ return KALQ().termine(von, bis).then(function(liste){
+    s.textContent = "";
+    add(s, el("h1", null, "Vereinskalender"), el("p", "lead", k.darf ? "Termine des Vereins, z. B. Ausschusssitzungen. Du kannst Termine anlegen, ändern und löschen – das landet direkt im Outlook-Kalender." : "Termine des Vereins, z. B. Ausschusssitzungen. Du kannst hier nur lesen."));
+    var kopf = el("div", "reihe monat"), zur = el("a", "btn klein", "‹ " + MONATE[vm - 1]), vor = el("a", "btn klein", MONATE[nm - 1] + " ›");
+    zur.href = "#/kalender/" + vj + "-" + pad(vm); vor.href = "#/kalender/" + nj + "-" + pad(nm);
+    var heuteL = el("a", "btn klein", "Heute"); heuteL.href = "#/kalender/" + heute.getFullYear() + "-" + pad(heute.getMonth() + 1);
+    add(kopf, zur, el("h2", null, MONATE[mo - 1] + " " + j), vor, heuteL, el("span", "sp"), k.darf ? btn("primary", "+ Neuer Termin", function(){ kalBearbeiten(null, j + "-" + pad(mo) + "-" + pad(Math.min(28, heute.getDate()))); }) : null);
+    add(s, kopf);
+    if(!liste.length){ add(s, el("p", "lead", "Keine Termine in diesem Monat.")); return; }
+    var t = el("table", "tabelle kal"), tb = el("tbody");
+    add(t, add(el("thead"), add(el("tr"), el("th", null, "Datum"), el("th", null, "Uhrzeit"), el("th", null, "Termin"), el("th", "ort", "Ort"), k.darf ? el("th", null, "") : null)), tb);
+    liste.forEach(function(ev){
+      var a = kalDatum(ev.start.dateTime), e = kalDatum(ev.end.dateTime); if(!a) return;
+      var d = isoZuDatum(a.iso), zeit = ev.isAllDay ? "ganztägig" : a.zeit + (e ? "–" + e.zeit : "");
+      var tag = WT[d.getDay()] + ", " + pad(a.t) + "." + pad(a.mo) + ".";
+      if(ev.isAllDay && e && isoPlus(a.iso, 1) !== e.iso){ var ende = isoZuDatum(isoPlus(e.iso, -1)); tag += " – " + pad(ende.getDate()) + "." + pad(ende.getMonth() + 1) + "."; }
+      var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview));
+      var tr = el("tr"); add(tr, el("td", null, tag), el("td", null, zeit), tit, el("td", "ort", ortT),
+        k.darf ? add(el("td", "z"), btn("klein", "Ändern", function(){ kalBearbeiten(ev); })) : null);
+      add(tb, tr); });
+    add(s, add(el("div", "scroll"), t));
+  }); }).catch(function(e){ fehlerZeigen(kalFehler(e)); });
+}
+function kalBearbeiten(ev, isoVorschlag){
+  var d = el("dialog"), f = el("form", "karte"); f.noValidate = true;
+  var a = ev && kalDatum(ev.start.dateTime), e = ev && kalDatum(ev.end.dateTime);
+  function feld(t, typ, v, cls){ var i = el("input"); i.type = typ; i.value = v || ""; var l = el("label", "fld" + (cls ? " " + cls : ""), t); add(l, i); l._i = i; return l; }
+  var fT = feld("Titel", "text", ev ? ev.subject : "", "w2"), fD = feld("Datum", "date", a ? a.iso : isoVorschlag),
+    fGanz = el("input"); fGanz.type = "checkbox"; fGanz.checked = !!(ev && ev.isAllDay);
+  var endeIso = ev && ev.isAllDay && e ? isoPlus(e.iso, -1) : (a ? a.iso : "");
+  var fBisD = feld("Bis Datum (mehrtägig)", "date", ev && ev.isAllDay && endeIso !== a.iso ? endeIso : ""),
+    fVon = feld("Beginn", "time", a && !ev.isAllDay ? a.zeit : "19:30"), fBis = feld("Ende", "time", e && !ev.isAllDay ? e.zeit : "21:00"),
+    fO = feld("Ort", "text", ev && ev.location ? ev.location.displayName : "", "w2"),
+    fN = el("textarea"); fN.rows = 3; fN.value = ev && ev.bodyPreview ? ev.bodyPreview : "";
+  var lGanz = add(el("label", "fld haken"), fGanz, " Ganztägig"), lN = add(el("label", "fld w2", "Notiz"), fN);
+  function sicht(){ fVon.hidden = fBis.hidden = fGanz.checked; fBisD.hidden = !fGanz.checked; }
+  fGanz.addEventListener("change", sicht); sicht();
+  var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
+  var loe = ev ? btn("gefahr", "Löschen", function(){
+    if(!confirm("Termin „" + (ev.subject || "") + "“ wirklich löschen? Er verschwindet für alle aus dem Vereinskalender.")) return;
+    loe.disabled = true; KALQ().loeschen(ev.id).then(function(){ d.close(); d.remove(); zeigeToast("Termin gelöscht"); route(); })
+      .catch(function(x){ loe.disabled = false; add(f, el("div", "fehler", kalFehler(x))); }); }) : null;
+  add(f, el("h2", null, ev ? "Termin ändern" : "Neuer Termin"), add(el("div", "formular"), fT, fD, lGanz, fVon, fBis, fBisD, fO, lN),
+    add(el("div", "reihe"), ok, btn("", "Abbrechen", function(){ d.close(); d.remove(); }), el("span", "sp"), loe));
+  add(d, f); document.body.appendChild(d); d.showModal(); fT._i.focus();
+  f.addEventListener("submit", function(x){ x.preventDefault();
+    var titel = fT._i.value.trim(), tag = fD._i.value; if(!titel || !tag){ zeigeToast("Bitte Titel und Datum eintragen."); return; }
+    var daten = {subject: titel, isAllDay: fGanz.checked, location: {displayName: fO._i.value.trim()}, body: {contentType: "text", content: fN.value.trim()}};
+    if(fGanz.checked){ var bisTag = fBisD._i.value && fBisD._i.value >= tag ? fBisD._i.value : tag;
+      daten.start = {dateTime: tag + "T00:00:00", timeZone: KAL.zone}; daten.end = {dateTime: isoPlus(bisTag, 1) + "T00:00:00", timeZone: KAL.zone}; }
+    else { var v = fVon._i.value || "19:30", b = fBis._i.value || v; if(b <= v){ zeigeToast("Das Ende muss nach dem Beginn liegen."); return; }
+      daten.start = {dateTime: tag + "T" + v + ":00", timeZone: KAL.zone}; daten.end = {dateTime: tag + "T" + b + ":00", timeZone: KAL.zone}; }
+    if(ev && fN.value.trim() === (ev.bodyPreview || "").trim()) delete daten.body; /* Vorschau ist gekürzt: unverändert nie zurückschreiben */
+    ok.disabled = true;
+    KALQ().speichern(ev ? ev.id : null, daten).then(function(){ d.close(); d.remove(); zeigeToast(titel + " gespeichert ✓"); KAL_MONAT = tag.slice(0, 7); var ziel = "#/kalender/" + KAL_MONAT; if(location.hash !== ziel) location.hash = ziel; else route(); })
+      .catch(function(y){ ok.disabled = false; add(f, el("div", "fehler", kalFehler(y))); });
+  });
+}
+function kalFehler(e){
+  if(e && e.kal) return "Der Vereinskalender ist für dein Konto noch nicht sichtbar. Er muss dir in Outlook freigegeben sein und du musst die Freigabe-Einladung in Outlook angenommen haben – bitte bei der Verwaltung melden.";
+  if(e && (e.status === 403 || e.status === 404)) return "Kein Zugriff auf den Vereinskalender (oder keine Bearbeitungsrechte) – bitte bei der Verwaltung melden.";
+  return fehlerText(e);
+}
+
 /* ---------- Ablauf ---------- */
 function route(){
   /* Im Anmelde-Popup trägt die Adresse den Antwortcode von Microsoft: dort nichts anzeigen. */
@@ -746,6 +940,8 @@ function route(){
   s.textContent = "";
   if(!angemeldet()){ seiteWillkommen(s); return; }
   if(teile[0] === "teamwear"){ seiteTeamwear(s); }
+  else if(teile[0] === "protokolle"){ seiteProtokolle(s, teile[1]); }
+  else if(teile[0] === "kalender"){ seiteKalender(s, teile[1]); }
   else if(teile[0] !== "verwaltung"){ seiteStart(s); }
   else if(teile[1] === "reinigung") seiteReinigung(s);
   else if(teile[1] === "ausleihe") seiteAusleihe(s, teile[2]);

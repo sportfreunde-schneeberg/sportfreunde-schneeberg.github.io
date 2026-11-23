@@ -118,3 +118,20 @@ dialog .karte{margin:0;border:none}
   .btn.ghost{padding:6px 10px;min-height:36px;font-size:13px}
   h1{font-size:22px}
 }
+/* Protokolle und Vereinskalender */
+.jahre{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px}
+.jahre a.chip{text-decoration:none;padding:5px 12px;font-size:14px}
+.jahre a.chip.ok{background:var(--green);color:#fff}
+.tabelle tr.leer td{color:var(--muted)}
+.tabelle .grau{color:var(--muted);font-size:13px}
+.docreihe{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:2px 0}
+.docreihe a.doc{color:var(--green);font-weight:600}
+.monat{align-items:center}
+.monat h2{margin:0 6px;min-width:150px;text-align:center}
+.notiz{color:var(--muted);font-size:13px;margin-top:2px;white-space:pre-line}
+.btn.gefahr{color:var(--err);border-color:var(--err)}
+label.fld.haken{flex-direction:row;align-items:center;gap:8px;min-height:44px}
+@media (max-width:520px){.monat h2{min-width:0;font-size:17px;flex:1 0 100%;text-align:left;order:-1}}
+a.btn{display:inline-flex;align-items:center;text-decoration:none}
+.kal .ortm{display:none}
+@media (max-width:520px){.kal th.ort,.kal td.ort{display:none}.kal .ortm{display:block}}
