@@ -23,7 +23,7 @@ var CFG = {
 };
 /* Hauptschalter fürs Schreiben (false = Portal nur lesend). Freigegeben nach Prüfung der Excel v1.4. */
 var SCHREIBEN_FREI = true; /* freigegeben 23.11.2026 nach Test (Kabinenreinigung Zeile 35 geschrieben, geprüft, geleert) */
-var SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Calendars.ReadWrite", "Calendars.ReadWrite.Shared", "Tasks.ReadWrite", "Group.Read.All"];
+var SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Calendars.ReadWrite", "Calendars.ReadWrite.Shared", "Tasks.ReadWrite", "Group.Read.All", "User.ReadBasic.All"];
 var GR = "https://graph.microsoft.com/v1.0";
 var ERSTE = 5; /* erste Datenzeile */
 var MONATE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
@@ -1003,7 +1003,7 @@ function seiteAufgaben(s){
         add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Zuständig"), el("th", null, "Fällig"), el("th", null, "Stand"))), tb);
         liste.forEach(function(a){ n++;
           var st = auStatus(a), ueber = st !== "erledigt" && a.dueDateTime && a.dueDateTime.slice(0, 10) < heute;
-          var wer = Object.keys(a.assignments || {}).map(function(id){ return D.leute[id] || "?"; }).join(", ");
+          var wer = Object.keys(a.assignments || {}).map(function(id){ return D.leute[id] || ""; }).filter(Boolean).join(", ");
           var titel = el("a", null, a.title); titel.href = auLink(a); titel.target = "_blank"; titel.rel = "noopener";
           var tr = el("tr"); add(tr, add(el("td"), a.priority <= 1 ? el("span", "chip offen", "dringend") : null, a.priority <= 1 ? " " : null, titel), el("td", null, wer || "–"),
             el("td", ueber ? "faellig" : null, auDatum(a.dueDateTime) || "–"), add(el("td"), el("span", "chip " + (st === "erledigt" ? "ok" : (st === "in Arbeit" ? "" : "offen")), st)));
