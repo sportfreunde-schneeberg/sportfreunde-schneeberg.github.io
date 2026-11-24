@@ -1110,7 +1110,7 @@ function kalAnleitung(s){
     add(el("div", "reihe"), exp, abo, kopie),
     schritt("1. Vereinskalender live in Outlook (für alle Vereinskonten, empfohlen)", [
       "Alle Vereinskonten (…@1928schneeberg.de) haben am 24.11.2026 eine Freigabe-Einladung per Mail bekommen: lesen dürfen alle, eintragen und ändern die Verwaltung und einzelne Ausschussmitglieder.",
-      liste(["In deinem Vereinskonto die Mail „…hat den Kalender „Vereinskalender_Spfr1928“ für Sie freigegeben“ öffnen und annehmen.",
+      liste(["In deinem Vereinskonto die Freigabe-Mail zum Kalender „Vereinskalender_Spfr1928“ öffnen und annehmen.",
         "Danach steht „Vereinskalender_Spfr1928“ in Outlook (PC, Web und Outlook-App auf dem Handy) in deiner Kalenderliste. Änderungen kommen von selbst.",
         "Mail nicht gefunden oder neu dabei? Bei der Verwaltung melden, dann kommt eine neue Einladung."])]),
     schritt("2. Einmalig als .ics-Datei (Stand von heute)", [
