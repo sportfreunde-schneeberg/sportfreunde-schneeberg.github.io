@@ -1418,42 +1418,67 @@ var TB_SP = ["preis", "firma", "ansprech", "tel", "am", "von", "zugesagt", "abge
 function tombolaListe(w){ var k = (w[3] || []).map(function(x){ return txt(x).toLowerCase(); }); return k[0] === "nr" && k[1] === "preis" && /firma/.test(k[2] || ""); }
 function tombolaZeilen(w){ var out = []; for(var z = 5; z <= w.length; z++){ var nr = zelle(w, z, 0); if(typeof nr !== "number") continue;
   var o = {zeile: z, nr: nr}; TB_SP.forEach(function(k, i){ o[k] = zelle(w, z, i + 1); }); out.push(o); } return out; }
+/* Darstellung „Gruppiert mit Matrix“ (wie Schlüssel/Inventar): Firma · wer kümmert sich (Angefragt von) · besorgt (Abgeholt).
+   Gruppen „Noch zu besorgen“ und „Besorgt“. „Besorgt“ lässt sich per Tipp umschalten; Zeile antippen öffnet alle Felder. */
 function tombolaEditor(d, b){
-  var box = el("div"), sum = el("div", "summe"), t = el("table", "tabelle tombola"), tb = el("tbody"), zeilen = tombolaZeilen(b.werte);
+  var box = el("div"), sum = el("div", "summe"), zeilen = tombolaZeilen(b.werte), liste = el("div", "scroll");
   var ex = el("a", null, "In Excel öffnen"); ex.href = d.webUrl; ex.target = "_blank"; ex.rel = "noopener";
-  add(box, add(el("p", "lead"), "Direkt hier bearbeiten: Feld ändern, dann „Speichern“ in der Zeile. Gespeichert wird in der Excel in Teams. ", ex), sum);
-  function zaehlen(){ var ja = 0, offen = 0, wert = 0; zeilen.forEach(function(z){ if(!txt(z.firma) && !txt(z.preis)) return; if(/^ja/i.test(txt(z.zugesagt))) ja++; else if(!/^nein/i.test(txt(z.zugesagt))) offen++; wert += zahl(z.wert) || 0; });
-    sum.textContent = ""; add(sum, add(el("span"), "zugesagt ", el("b", null, String(ja))), add(el("span"), "offen ", el("b", null, String(offen))), add(el("span"), "Wert ", el("b", null, euro(wert)))); }
-  add(t, add(el("thead"), add(el("tr"), el("th", null, "Nr"), el("th", null, "Firma / Spender"), el("th", null, "Preis"), el("th", null, "Ansprechpartner · Telefon"), el("th", null, "Angefragt"), el("th", null, "Zugesagt"), el("th", null, "Abgeholt"), el("th", null, "Wert €"), el("th", null, "Bemerkung"), el("th"))), tb);
-  function eingabe(v, typ, ph){ var i = el("input"); i.type = typ || "text"; i.value = v == null ? "" : v; if(ph) i.placeholder = ph; return i; }
-  function auswahl(v, werte){ var s2 = el("select"); werte.forEach(function(w){ var o = el("option", null, w || "–"); o.value = w; add(s2, o); }); s2.value = werte.indexOf(txt(v)) > -1 ? txt(v) : werte[0]; return s2; }
-  function zeile(z){
-    var f = {firma: eingabe(txt(z.firma)), preis: eingabe(txt(z.preis)), ansprech: eingabe(txt(z.ansprech), "text", "Name"), tel: eingabe(txt(z.tel), "tel", "Telefon"),
-      am: eingabe(typeof z.am === "number" ? (function(dd){ return dd.getUTCFullYear() + "-" + pad(dd.getUTCMonth() + 1) + "-" + pad(dd.getUTCDate()); })(serieZuDatum(z.am)) : "", "date"),
-      von: eingabe(txt(z.von), "text", "von"), zugesagt: auswahl(z.zugesagt, ["offen", "Ja", "Nein"]), abgeholt: auswahl(z.abgeholt, ["", "Ja", "Nein"]),
-      wert: eingabe(z.wert === "" || z.wert == null ? "" : zahlText(z.wert), "text", "0"), bem: eingabe(txt(z.bem))};
-    f.wert.inputMode = "decimal";
-    var sp = btn("primary klein", "Speichern", function(){ speichern(z, f, sp, tr); }); sp.disabled = true;
-    Object.keys(f).forEach(function(k){ f[k].addEventListener("input", function(){ sp.disabled = false; tr.classList.add("geaendert"); }); f[k].addEventListener("change", function(){ sp.disabled = false; tr.classList.add("geaendert"); }); });
-    var tr = add(el("tr", /^ja/i.test(txt(z.zugesagt)) ? "zugesagt" : null), el("td", "z", String(z.nr)), add(el("td"), f.firma), add(el("td"), f.preis), add(el("td"), f.ansprech, f.tel),
-      add(el("td"), f.am, f.von), add(el("td"), f.zugesagt), add(el("td"), f.abgeholt), add(el("td"), f.wert), add(el("td"), f.bem), add(el("td"), sp));
-    return tr; }
-  function speichern(z, f, sp, tr){
-    var wert = eingabeZahl(f.wert.value), d0 = isoZuDatum(f.am.value);
-    if(f.wert.value.trim() && wert == null){ zeigeToast("Wert bitte als Zahl eingeben."); return; }
-    var werte = [[f.preis.value.trim(), f.firma.value.trim(), f.ansprech.value.trim(), f.tel.value.trim(), d0 ? datumZuSerie(d0) : "", f.von.value.trim(), f.zugesagt.value, f.abgeholt.value, wert == null ? "" : wert, f.bem.value.trim()]];
-    sp.disabled = true;
+  var ja = function(v){ return /^ja/i.test(txt(v)); }, belegt = function(z){ return txt(z.firma) || txt(z.preis); };
+  var neuBtn = btn("primary", "+ Neuer Eintrag", function(){ var z = zeilen.filter(function(x){ return !belegt(x); })[0];
+    if(!z){ zeigeToast("Keine freie Zeile mehr – bitte in Excel Zeilen einfügen."); return; } dialog(z); });
+  add(box, add(el("p", "lead"), "Eintrag antippen zum Bearbeiten, „Besorgt“ antippen zum Abhaken. Gespeichert wird in der Excel in Teams. ", ex), sum, add(el("div", "reihe"), neuBtn), liste);
+  function zaehlen(){ var n = 0, bes = 0, zu = 0, wert = 0; zeilen.forEach(function(z){ if(!belegt(z)) return; n++; if(ja(z.abgeholt)) bes++; if(ja(z.zugesagt)) zu++; wert += zahl(z.wert) || 0; });
+    sum.textContent = ""; add(sum, add(el("span"), "Einträge ", el("b", null, String(n))), add(el("span"), "zugesagt ", el("b", null, String(zu))), add(el("span"), "besorgt ", el("b", null, String(bes))), add(el("span"), "Wert ", el("b", null, euro(wert)))); }
+  function zeigen(){ liste.textContent = ""; zaehlen();
+    var t = el("table", "matrix"), k = el("tr"); add(k, el("th", null, "Firma / Spender"), el("th", "breit", "Preis"), el("th", null, "Kümmert sich"), el("th", "m bez", "Besorgt"), el("th", "pf")); add(t, add(el("thead"), k));
+    var tb = el("tbody"), gruppen = [["Noch zu besorgen", function(z){ return !ja(z.abgeholt); }], ["Besorgt", function(z){ return ja(z.abgeholt); }]], n = 0;
+    gruppen.forEach(function(g){ var r = zeilen.filter(function(z){ return belegt(z) && g[1](z); }); if(!r.length) return; n += r.length;
+      add(tb, add(el("tr", "gr"), el("td", null, g[0] + " · " + r.length))); tb.lastChild.firstChild.colSpan = 5;
+      r.forEach(function(z){ var tr = el("tr", /^nein/i.test(txt(z.zugesagt)) ? "aus" : null), nm = el("th");
+        add(nm, el("b", null, txt(z.firma) || "–"));
+        var info = [txt(z.preis), ja(z.zugesagt) ? "zugesagt" : (/^nein/i.test(txt(z.zugesagt)) ? "abgesagt" : "")].filter(Boolean).join(" · ");
+        if(info) add(nm, el("small", "nurhandy", info)); if(ja(z.zugesagt) || /^nein/i.test(txt(z.zugesagt))) add(nm, el("small", "breit", ja(z.zugesagt) ? "zugesagt" : "abgesagt")); if(txt(z.bem)) add(nm, el("small", null, txt(z.bem)));
+        var chip = el("button", "chip " + (ja(z.abgeholt) ? "ok" : "offen"), ja(z.abgeholt) ? "✓" : "offen"); chip.type = "button"; chip.title = "Besorgt umschalten";
+        chip.addEventListener("click", function(ev){ ev.stopPropagation(); var w = tombolaWerte(z); w[7] = ja(z.abgeholt) ? "" : "Ja"; chip.disabled = true; speichern(z, w).catch(function(){ chip.disabled = false; }); });
+        add(tr, nm, el("td", "breit", txt(z.preis)), el("td", null, txt(z.von) || "–"), add(el("td", "m bez"), chip), el("td", "pf", "›"));
+        matrixKlick(tr, function(){ dialog(z); }); add(tb, tr); }); });
+    add(t, tb); if(n) add(liste, t); else add(liste, el("p", "lead", "Noch keine Einträge."));
+    var frei = zeilen.filter(function(z){ return !belegt(z); }).length;
+    add(liste, el("p", "grau", frei ? frei + " freie Zeilen in der Liste. Mehr Zeilen: in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen." : "Keine freie Zeile mehr – in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen.")); }
+  function tombolaWerte(z){ return TB_SP.map(function(k){ var v = z[k]; return v == null ? "" : v; }); }
+  function speichern(z, werte){
     /* vorher frisch lesen: steht in der Zeile noch dieselbe Nr? */
-    VAQ().blatt(d.id).then(function(b2){ if(zelle(b2.werte, z.zeile, 0) !== z.nr) throw new Error("Die Liste wurde inzwischen in Excel geändert. Bitte die Seite neu laden.");
-      return VAQ().schreiben(d.id, b2.name, "B" + z.zeile + ":K" + z.zeile, werte); })
-      .then(function(){ TB_SP.forEach(function(k, i){ z[k] = werte[0][i]; }); tr.classList.remove("geaendert"); tr.classList.toggle("zugesagt", z.zugesagt === "Ja"); zaehlen(); zeigeToast((z.firma || "Zeile " + z.nr) + " gespeichert ✓"); })
-      .catch(function(e){ sp.disabled = false; zeigeToast(e && e.status ? vaFehler(e) : (e.message || "Speichern hat nicht geklappt.")); });
+    return VAQ().blatt(d.id).then(function(b2){ if(zelle(b2.werte, z.zeile, 0) !== z.nr) throw new Error("Die Liste wurde inzwischen in Excel geändert. Bitte die Seite neu laden.");
+      return VAQ().schreiben(d.id, b2.name, "B" + z.zeile + ":K" + z.zeile, [werte]); })
+      .then(function(){ TB_SP.forEach(function(k, i){ z[k] = werte[i]; }); zeigen(); zeigeToast((txt(z.firma) || "Zeile " + z.nr) + " gespeichert ✓"); })
+      .catch(function(e){ zeigeToast(e && e.status ? vaFehler(e) : (e.message || "Speichern hat nicht geklappt.")); throw e; });
   }
-  zeilen.forEach(function(z){ add(tb, zeile(z)); });
-  add(box, add(el("div", "scroll"), t));
-  var frei = zeilen.filter(function(z){ return !txt(z.firma) && !txt(z.preis); }).length;
-  add(box, el("p", "grau", frei ? frei + " freie Zeilen am Ende der Liste. Mehr Zeilen: in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen." : "Keine freie Zeile mehr – in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen."));
-  zaehlen(); return box;
+  function dialog(z){
+    var dl = el("dialog"), f = el("form", "karte"); f.noValidate = true;
+    function feld(t, i, cls){ var l = el("label", "fld" + (cls ? " " + cls : ""), t); add(l, i); return l; }
+    function eingabe(v, typ, ph){ var i = el("input"); i.type = typ || "text"; i.value = v == null ? "" : v; if(ph) i.placeholder = ph; return i; }
+    function auswahl(v, werte){ var s2 = el("select"); werte.forEach(function(w){ var o = el("option", null, w || "–"); o.value = w; add(s2, o); }); s2.value = werte.indexOf(txt(v)) > -1 ? txt(v) : werte[0]; return s2; }
+    var e = {firma: eingabe(txt(z.firma)), preis: eingabe(txt(z.preis)), von: eingabe(txt(z.von), "text", "Name"), abgeholt: auswahl(z.abgeholt, ["", "Ja", "Nein"]),
+      zugesagt: auswahl(z.zugesagt, ["offen", "Ja", "Nein"]), ansprech: eingabe(txt(z.ansprech), "text", "Name"), tel: eingabe(txt(z.tel), "tel"),
+      am: eingabe(typeof z.am === "number" ? (function(dd){ return dd.getUTCFullYear() + "-" + pad(dd.getUTCMonth() + 1) + "-" + pad(dd.getUTCDate()); })(serieZuDatum(z.am)) : "", "date"),
+      wert: eingabe(z.wert === "" || z.wert == null ? "" : zahlText(z.wert), "text", "0"), bem: eingabe(txt(z.bem))};
+    e.wert.inputMode = "decimal"; e.abgeholt.options[0].textContent = "offen";
+    var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
+    add(f, el("h2", null, belegt(z) ? "Tombola-Eintrag ändern" : "Neuer Tombola-Eintrag"),
+      add(el("div", "formular"), feld("Firma / Spender", e.firma, "w2"), feld("Preis", e.preis, "w2"), feld("Kümmert sich (angefragt von)", e.von), feld("Besorgt (abgeholt)", e.abgeholt),
+        feld("Zugesagt", e.zugesagt), feld("Angefragt am", e.am), feld("Ansprechpartner", e.ansprech), feld("Telefon", e.tel), feld("Wert (€)", e.wert), feld("Bemerkung", e.bem, "w2")),
+      add(el("div", "reihe"), ok, btn("", "Abbrechen", function(){ dl.close(); dl.remove(); })));
+    add(dl, f); document.body.appendChild(dl); dl.showModal(); e.firma.focus();
+    f.addEventListener("submit", function(ev){ ev.preventDefault();
+      var wert = eingabeZahl(e.wert.value), d0 = isoZuDatum(e.am.value);
+      if(e.wert.value.trim() && wert == null){ zeigeToast("Wert bitte als Zahl eingeben."); return; }
+      if(!e.firma.value.trim() && !e.preis.value.trim()){ zeigeToast("Bitte Firma oder Preis eintragen."); return; }
+      ok.disabled = true;
+      speichern(z, [e.preis.value.trim(), e.firma.value.trim(), e.ansprech.value.trim(), e.tel.value.trim(), d0 ? datumZuSerie(d0) : "", e.von.value.trim(), e.zugesagt.value, e.abgeholt.value, wert == null ? "" : wert, e.bem.value.trim()])
+        .then(function(){ dl.close(); dl.remove(); }).catch(function(){ ok.disabled = false; });
+    });
+  }
+  zeigen(); return box;
 }
 function tabelleAus(werte){
   var zeilen = werte.filter(function(r){ return r.some(function(v){ return !leer(v); }); }).slice(0, 300);
