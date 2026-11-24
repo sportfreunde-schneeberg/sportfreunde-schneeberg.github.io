@@ -673,7 +673,8 @@ function twFinden(){
 }
 var TwLive = {
   /* Lesen in derselben Excel-Sitzung wie das Schreiben, sonst kommt kurz nach dem Abhaken noch der alte Stand zurück. */
-  lesen: function(){ return twFinden().then(function(I){ return gf(I.wb + "/tables('Bestellungen')/range?$select=address,values", twSess ? {sitzung: twSess} : {}); }).then(function(b){ return ausrichten(b.address, b.values || []); }); },
+  lesen: function(){ return twFinden().then(function(I){ var pf = I.wb + "/tables('Bestellungen')/range?$select=address,values";
+    return (twSess ? gf(pf, {sitzung: twSess}).catch(function(e){ if(e && (e.status === 401 || e.status === 403)) throw e; twSess = null; return gf(pf); }) : gf(pf)); }).then(function(b){ return ausrichten(b.address, b.values || []); }); },
   preise: function(){ return twFinden().then(function(I){ return gf(I.wb + "/tables('Artikel')/range?$select=values"); }).then(function(b){ return twPreisliste(b.values || []); }); },
   schreiben: function(adresse, werte){
     var einmal = function(){ return twFinden().then(function(I){
