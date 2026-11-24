@@ -1172,7 +1172,9 @@ var VaLive = {
     return alle("/drives/" + D.drive + "/" + (itemId ? "items/" + itemId : "root") + "/children?$select=id,name,folder,file,webUrl,size,lastModifiedDateTime&$top=200"); }); },
   blatt: function(itemId){ return VaLive.drive().then(function(D){ var wb = "/drives/" + D.drive + "/items/" + itemId + "/workbook";
     return gf(wb + "/worksheets?$select=name").then(function(l){ var n = l.value[0].name;
-      return gf(wb + blattPfad(n) + "/usedRange(valuesOnly=true)?$select=address,values").then(function(b){ return {name: n, werte: b.values || []}; }); }); }); },
+      return gf(wb + blattPfad(n) + "/usedRange(valuesOnly=true)?$select=address,values").then(function(b){ return {name: n, werte: ausrichten(b.address, b.values || [])}; }); }); }); },
+  schreiben: function(itemId, blatt, adresse, werte){ return VaLive.drive().then(function(D){
+    return gf("/drives/" + D.drive + "/items/" + itemId + "/workbook" + blattPfad(blatt) + "/range(address='" + adresse + "')", {method: "PATCH", body: {values: werte}}); }); },
   termine: function(){ var j = new Date().getFullYear(), jahre = [j - 1, j, j + 1, j + 2];
     return KalLive.finden().then(function(){ return Promise.all(jahre.map(function(y){ return KalLive.termine(y + "-01-01T00:00:00", (y + 1) + "-01-01T00:00:00"); })); })
       .then(function(l){ return [].concat.apply([], l); }).catch(function(){ return []; }); }
@@ -1191,7 +1193,13 @@ var VaTest = {
   suchen: function(id, k){ k = k || VaTest.bauen(); if(k.id === id) return k; for(var i = 0; i < (k.kinder || []).length; i++){ var r = VaTest.suchen(id, k.kinder[i]); if(r) return r; } return null; },
   drive: function(){ return Promise.resolve({drive: "test", web: "#"}); },
   kinder: function(id){ var k = id ? VaTest.suchen(id) : VaTest.bauen(); return Promise.resolve((k && k.kinder) || []); },
-  blatt: function(){ return Promise.resolve({name: "Dienstplan", werte: [["Dienstplan (Beispieldaten)", "", ""], ["Zeit", "Theke", "Kasse"], ["14–16 Uhr", "Person A", "Person B"], ["16–18 Uhr", "Person C", "Person D"]]}); },
+  tombola: null,
+  blatt: function(id){ var it = VaTest.suchen(id);
+    if(it && /tombola/i.test(it.name)){ if(!VaTest.tombola){ VaTest.tombola = [["Tombola (Beispieldaten)"], ["Hinweis"], [], ["Nr", "Preis", "Firma / Spender", "Ansprechpartner", "Telefon", "Angefragt am", "Angefragt von", "Zugesagt", "Abgeholt", "Wert (€)", "Bemerkung"]];
+        for(var i = 1; i <= 6; i++) VaTest.tombola.push([i, i === 1 ? "Gutschein" : "", i < 4 ? "Firma " + String.fromCharCode(64 + i) : "", "", "", "", i === 1 ? "AB" : "", i === 1 ? "Ja" : "offen", "", i === 1 ? 25 : "", ""]); }
+      return Promise.resolve({name: "Tombola", werte: JSON.parse(JSON.stringify(VaTest.tombola))}); }
+    return Promise.resolve({name: "Dienstplan", werte: [["Dienstplan (Beispieldaten)", "", ""], ["Zeit", "Theke", "Kasse"], ["14–16 Uhr", "Person A", "Person B"], ["16–18 Uhr", "Person C", "Person D"]]}); },
+  schreiben: function(id, blatt, adresse, werte){ window.__tombola = (window.__tombola || []).concat([{adresse: adresse, werte: werte}]); return Test.schreibenIn(VaTest.tombola, blatt, adresse, werte); },
   termine: function(){ var j = new Date().getFullYear(); return Promise.resolve([{subject: "Weihnachtsfeier", start: {dateTime: j + "-12-19T18:00:00"}, end: {dateTime: j + "-12-19T23:00:00"}, isAllDay: false}]); }
 };
 function VAQ(){ return TEST ? VaTest : VaLive; }
@@ -1320,11 +1328,58 @@ function seiteFestJahr(s, f, jahr, ber){
         /* Dienstplan und Tombola: Excel direkt als Tabelle zeigen */
         if(ber === "dienstplan" || ber === "tombola") alleD.filter(function(d){ return !d.folder && /\.xlsx$/i.test(d.name); }).forEach(function(d){
           var platz2 = el("div", "laden", "„" + d.name + "“ wird geladen …"); add(karte, platz2);
-          VAQ().blatt(d.id).then(function(b){ var c = el("div"); add(c, el("h2", null, d.name + " · Blatt „" + b.name + "“"), tabelleAus(b.werte)); platz2.replaceWith(c); })
+          VAQ().blatt(d.id).then(function(b){ var c = el("div");
+              if(ber === "tombola" && tombolaListe(b.werte)) add(c, el("h2", null, d.name), tombolaEditor(d, b));
+              else add(c, el("h2", null, d.name + " · Blatt „" + b.name + "“"), tabelleAus(b.werte));
+              platz2.replaceWith(c); })
             .catch(function(){ platz2.replaceWith(el("p", "grau", "„" + d.name + "“ ließ sich nicht als Tabelle anzeigen – bitte in Excel öffnen.")); }); });
       }).catch(function(e){ platz.replaceWith(el("div", "fehler", vaFehler(e))); });
     });
   }).catch(function(e){ fehlerZeigen(vaFehler(e)); });
+}
+/* Tombola-Liste (Vorlage Tools/make_tombola.py): Kopf in Zeile 4, Einträge ab Zeile 5 mit Nr in Spalte A.
+   Spalten B–K: Preis, Firma, Ansprechpartner, Telefon, Angefragt am, Angefragt von, Zugesagt, Abgeholt, Wert, Bemerkung.
+   Geschrieben wird je Zeile B–K; Nr (A) und die Zähler unter der Liste (Formeln) bleiben unberührt. */
+var TB_SP = ["preis", "firma", "ansprech", "tel", "am", "von", "zugesagt", "abgeholt", "wert", "bem"];
+function tombolaListe(w){ var k = (w[3] || []).map(function(x){ return txt(x).toLowerCase(); }); return k[0] === "nr" && k[1] === "preis" && /firma/.test(k[2] || ""); }
+function tombolaZeilen(w){ var out = []; for(var z = 5; z <= w.length; z++){ var nr = zelle(w, z, 0); if(typeof nr !== "number") continue;
+  var o = {zeile: z, nr: nr}; TB_SP.forEach(function(k, i){ o[k] = zelle(w, z, i + 1); }); out.push(o); } return out; }
+function tombolaEditor(d, b){
+  var box = el("div"), sum = el("div", "summe"), t = el("table", "tabelle tombola"), tb = el("tbody"), zeilen = tombolaZeilen(b.werte);
+  var ex = el("a", null, "In Excel öffnen"); ex.href = d.webUrl; ex.target = "_blank"; ex.rel = "noopener";
+  add(box, add(el("p", "lead"), "Direkt hier bearbeiten: Feld ändern, dann „Speichern“ in der Zeile. Gespeichert wird in der Excel in Teams. ", ex), sum);
+  function zaehlen(){ var ja = 0, offen = 0, wert = 0; zeilen.forEach(function(z){ if(!txt(z.firma) && !txt(z.preis)) return; if(/^ja/i.test(txt(z.zugesagt))) ja++; else if(!/^nein/i.test(txt(z.zugesagt))) offen++; wert += zahl(z.wert) || 0; });
+    sum.textContent = ""; add(sum, add(el("span"), "zugesagt ", el("b", null, String(ja))), add(el("span"), "offen ", el("b", null, String(offen))), add(el("span"), "Wert ", el("b", null, euro(wert)))); }
+  add(t, add(el("thead"), add(el("tr"), el("th", null, "Nr"), el("th", null, "Firma / Spender"), el("th", null, "Preis"), el("th", null, "Ansprechpartner · Telefon"), el("th", null, "Angefragt"), el("th", null, "Zugesagt"), el("th", null, "Abgeholt"), el("th", null, "Wert €"), el("th", null, "Bemerkung"), el("th"))), tb);
+  function eingabe(v, typ, ph){ var i = el("input"); i.type = typ || "text"; i.value = v == null ? "" : v; if(ph) i.placeholder = ph; return i; }
+  function auswahl(v, werte){ var s2 = el("select"); werte.forEach(function(w){ var o = el("option", null, w || "–"); o.value = w; add(s2, o); }); s2.value = werte.indexOf(txt(v)) > -1 ? txt(v) : werte[0]; return s2; }
+  function zeile(z){
+    var f = {firma: eingabe(txt(z.firma)), preis: eingabe(txt(z.preis)), ansprech: eingabe(txt(z.ansprech), "text", "Name"), tel: eingabe(txt(z.tel), "tel", "Telefon"),
+      am: eingabe(typeof z.am === "number" ? (function(dd){ return dd.getUTCFullYear() + "-" + pad(dd.getUTCMonth() + 1) + "-" + pad(dd.getUTCDate()); })(serieZuDatum(z.am)) : "", "date"),
+      von: eingabe(txt(z.von), "text", "von"), zugesagt: auswahl(z.zugesagt, ["offen", "Ja", "Nein"]), abgeholt: auswahl(z.abgeholt, ["", "Ja", "Nein"]),
+      wert: eingabe(z.wert === "" || z.wert == null ? "" : zahlText(z.wert), "text", "0"), bem: eingabe(txt(z.bem))};
+    f.wert.inputMode = "decimal";
+    var sp = btn("primary klein", "Speichern", function(){ speichern(z, f, sp, tr); }); sp.disabled = true;
+    Object.keys(f).forEach(function(k){ f[k].addEventListener("input", function(){ sp.disabled = false; tr.classList.add("geaendert"); }); f[k].addEventListener("change", function(){ sp.disabled = false; tr.classList.add("geaendert"); }); });
+    var tr = add(el("tr", /^ja/i.test(txt(z.zugesagt)) ? "zugesagt" : null), el("td", "z", String(z.nr)), add(el("td"), f.firma), add(el("td"), f.preis), add(el("td"), f.ansprech, f.tel),
+      add(el("td"), f.am, f.von), add(el("td"), f.zugesagt), add(el("td"), f.abgeholt), add(el("td"), f.wert), add(el("td"), f.bem), add(el("td"), sp));
+    return tr; }
+  function speichern(z, f, sp, tr){
+    var wert = eingabeZahl(f.wert.value), d0 = isoZuDatum(f.am.value);
+    if(f.wert.value.trim() && wert == null){ zeigeToast("Wert bitte als Zahl eingeben."); return; }
+    var werte = [[f.preis.value.trim(), f.firma.value.trim(), f.ansprech.value.trim(), f.tel.value.trim(), d0 ? datumZuSerie(d0) : "", f.von.value.trim(), f.zugesagt.value, f.abgeholt.value, wert == null ? "" : wert, f.bem.value.trim()]];
+    sp.disabled = true;
+    /* vorher frisch lesen: steht in der Zeile noch dieselbe Nr? */
+    VAQ().blatt(d.id).then(function(b2){ if(zelle(b2.werte, z.zeile, 0) !== z.nr) throw new Error("Die Liste wurde inzwischen in Excel geändert. Bitte die Seite neu laden.");
+      return VAQ().schreiben(d.id, b2.name, "B" + z.zeile + ":K" + z.zeile, werte); })
+      .then(function(){ TB_SP.forEach(function(k, i){ z[k] = werte[0][i]; }); tr.classList.remove("geaendert"); tr.classList.toggle("zugesagt", z.zugesagt === "Ja"); zaehlen(); zeigeToast((z.firma || "Zeile " + z.nr) + " gespeichert ✓"); })
+      .catch(function(e){ sp.disabled = false; zeigeToast(e && e.status ? vaFehler(e) : (e.message || "Speichern hat nicht geklappt.")); });
+  }
+  zeilen.forEach(function(z){ add(tb, zeile(z)); });
+  add(box, add(el("div", "scroll"), t));
+  var frei = zeilen.filter(function(z){ return !txt(z.firma) && !txt(z.preis); }).length;
+  add(box, el("p", "grau", frei ? frei + " freie Zeilen am Ende der Liste. Mehr Zeilen: in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen." : "Keine freie Zeile mehr – in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen."));
+  zaehlen(); return box;
 }
 function tabelleAus(werte){
   var zeilen = werte.filter(function(r){ return r.some(function(v){ return !leer(v); }); }).slice(0, 300);
