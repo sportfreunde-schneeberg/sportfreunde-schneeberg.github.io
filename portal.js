@@ -1017,9 +1017,9 @@ function icsText(liste, name){
   z.push("END:VCALENDAR"); return z.join("\r\n") + "\r\n"; }
 function icsLaden(dateiname, text){ var b = new Blob([text], {type: "text/calendar;charset=utf-8"}), a = document.createElement("a");
   a.href = URL.createObjectURL(b); a.download = dateiname; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
-function icsAusOrt(t){ var z = /^(\d{2}:\d{2})(?:–(\d{2}:\d{2}))?/.exec(t.zeit || "");
+function icsAusOrt(t){ var z = /(\d{2}:\d{2})(?:–(\d{2}:\d{2}))?/.exec(t.zeit || "");
   return {uid: "ort-" + t.start + "-" + t.titel.replace(/[^a-z0-9]/gi, "").slice(0, 30) + "@1928schneeberg.de", titel: t.titel, start: t.start, ende: t.ende, von: z ? z[1] : "", bis: z && z[2] ? z[2] : "",
-    ort: t.ort, notiz: [t.veranstalter, "Quelle: " + (t.quelle === "Gemeinde" ? "Gemeinde Schneeberg (Odenwald-Allianz)" : "Homepage 1928schneeberg.de")].filter(Boolean).join("\n")}; }
+    ort: t.ort, notiz: [t.veranstalter, "Quelle: " + ({Gemeinde: "Gemeinde Schneeberg (Odenwald-Allianz)", Homepage: "Homepage 1928schneeberg.de", Spiel: "fussball.de", Training: "Übersicht Training_Spiel"}[t.quelle] || t.quelle)].filter(Boolean).join("\n")}; }
 function icsAusOutlook(ev){ var a = kalDatum(ev.start.dateTime), e = kalDatum(ev.end.dateTime); if(!a) return null;
   return {uid: (ev.id || a.iso + ev.subject).replace(/[^a-z0-9]/gi, "").slice(-60) + "@vereinskalender.1928schneeberg.de", titel: ev.subject || "(ohne Titel)", start: a.iso,
     ende: ev.isAllDay ? (e ? isoPlus(e.iso, -1) : a.iso) : (e ? e.iso : a.iso), von: ev.isAllDay ? "" : a.zeit, bis: ev.isAllDay || !e ? "" : e.zeit,
@@ -1030,13 +1030,36 @@ function ortLaden(){
     return ortCache = Promise.resolve({termine: [
       {quelle: "Gemeinde", titel: "Adventsglühwein", start: j + "-" + m + "-03", ende: j + "-" + m + "-03", zeit: "16:30", ort: "Dorfwiesenhaus", veranstalter: "Musikverein (Beispiel)", link: "#"},
       {quelle: "Homepage", titel: "Arbeitseinsatz", start: j + "-" + m + "-14", ende: j + "-" + m + "-14", zeit: "", ort: "", veranstalter: "Sportfreunde Schneeberg", link: "#"},
-      {quelle: "Homepage", titel: "Jugendturnier", start: j + "-" + m + "-20", ende: j + "-" + m + "-21", zeit: "", ort: "", veranstalter: "Sportfreunde Schneeberg", link: "#"}]}); }
+      {quelle: "Homepage", titel: "Jugendturnier", start: j + "-" + m + "-20", ende: j + "-" + m + "-21", zeit: "", ort: "", veranstalter: "Sportfreunde Schneeberg", link: "#"},
+      {quelle: "Spiel", titel: "Verein A : Verein B (Beispiel)", start: j + "-" + m + "-22", ende: j + "-" + m + "-22", zeit: "15:00", ort: "", veranstalter: "Herren · A Klasse", link: "#"},
+      {quelle: "Spiel", titel: "Verein C : Verein D (Absetzung)", start: j + "-" + m + "-08", ende: j + "-" + m + "-08", zeit: "11:30", ort: "", veranstalter: "E-Junioren · Gruppe", link: "#", abgesetzt: true}]}); }
   return ortCache = finden().then(function(i){ return gf("/drives/" + i.drive + "/root:/" + pfadK(ORT_PFAD)); })
     .then(function(it){ return fetch(it["@microsoft.graph.downloadUrl"]); })
     .then(function(r){ if(!r.ok) throw new Error("Datei " + r.status); return r.json(); })
     .catch(function(){ ortCache = null; return null; });
 }
-var ORT_AN = (function(){ try{ return localStorage.getItem("spfrOrtTermine") !== "aus"; }catch(_){ return true; } })();
+/* Zuschaltbare Ebenen im Vereinskalender (je Browser gemerkt): Termine im Ort (Gemeinde, Homepage), Spiele (fussball.de), Training (Übersicht Training_Spiel) */
+function ebeneLesen(k, std){ try{ var v = localStorage.getItem(k); return v ? v === "an" : std; }catch(_){ return std; } }
+var EBENEN = {ort: ebeneLesen("spfrOrtTermine", true), spiele: ebeneLesen("spfrSpiele", true), training: ebeneLesen("spfrTraining", false)};
+var EBENE_KEY = {ort: "spfrOrtTermine", spiele: "spfrSpiele", training: "spfrTraining"};
+/* Trainingstermine eines Monats aus der „Übersicht Training_Spiel“ (Team Jugend): Zeilen mit „Training“ in Spalte B,
+   Wochentage aus der Kopfzeile (Montag …), Zelle = Uhrzeit (z. B. „17.00 - 18.30“, „19 -20.30 Uhr“, „A - 18.30-20.00“, „x“).
+   Ferien, Winterpause und Saisonstart (Bemerkungen) sind nicht berücksichtigt. */
+function trainingImMonat(plan, j, mo){
+  if(!plan || !plan.werte) return [];
+  var w = plan.werte, kopf = -1, tage = {}, WTAG = ["sonntag", "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag"];
+  for(var i = 0; i < Math.min(8, w.length); i++){ (w[i] || []).forEach(function(c, k){ var x = WTAG.indexOf(txt(c).toLowerCase()); if(x > -1){ tage[k] = x; kopf = i; } }); if(kopf > -1) break; }
+  if(kopf < 0) return [];
+  var out = [], team = "", tageImMonat = new Date(j, mo, 0).getDate();
+  for(var r = kopf + 1; r < w.length; r++){ var z = w[r] || []; if(txt(z[0])) team = txt(z[0]); if(!/training/i.test(txt(z[1])) || !team) continue;
+    Object.keys(tage).forEach(function(k){ var zelle = txt(z[k]); if(!zelle) return;
+      var m = /(\d{1,2})(?:[.:](\d{2}))?\s*(?:Uhr)?\s*(?:-|–|bis)\s*(\d{1,2})(?:[.:](\d{2}))?/.exec(zelle) || /(\d{1,2})[.:](\d{2})/.exec(zelle);
+      var von = m ? pad(+m[1]) + ":" + (m[2] || "00") : "", bis = m && m[3] ? pad(+m[3]) + ":" + (m[4] || "00") : "";
+      var rest = zelle.replace(/\d{1,2}([.:]\d{2})?|uhr|-|–|bis/gi, "").trim();
+      for(var t = 1; t <= tageImMonat; t++){ var d = new Date(j, mo - 1, t); if(d.getDay() !== tage[k]) continue;
+        out.push({quelle: "Training", titel: "Training " + team, start: j + "-" + pad(mo) + "-" + pad(t), ende: j + "-" + pad(mo) + "-" + pad(t),
+          zeit: von ? von + (bis ? "–" + bis : "") : "", ort: "", veranstalter: (rest && !/^x$/i.test(rest) ? "Übersicht: „" + zelle + "“" : (von ? "" : "Uhrzeit laut Übersicht offen")), link: plan.web || ""}); } }); }
+  return out; }
 /* gleicher Termin wie im Vereinskalender? (gleicher Tag und ein gemeinsames Wort ab 5 Buchstaben, z. B. „Schlachtfest“) */
 function ortDoppelt(t, liste){ var w = (t.titel.toLowerCase().match(/[a-zäöüß]{5,}/g) || []);
   return liste.some(function(ev){ var a = kalDatum(ev.start.dateTime); if(!a || a.iso !== t.start) return false; var s2 = (ev.subject || "").toLowerCase(); return w.some(function(x){ return s2.indexOf(x) > -1; }); }); }
@@ -1047,7 +1070,7 @@ function seiteKalender(s, monatTeil){
   var j = mm ? +mm[1] : heute.getFullYear(), mo = mm ? +mm[2] : heute.getMonth() + 1; KAL_MONAT = j + "-" + pad(mo);
   var von = j + "-" + pad(mo) + "-01T00:00:00", nj = mo === 12 ? j + 1 : j, nm = mo === 12 ? 1 : mo + 1, bis = nj + "-" + pad(nm) + "-01T00:00:00";
   var vj = mo === 1 ? j - 1 : j, vm = mo === 1 ? 12 : mo - 1;
-  KALQ().finden().then(function(k){ return Promise.all([KALQ().termine(von, bis), ortLaden()]).then(function(x){ var liste = x[0], ort = x[1];
+  KALQ().finden().then(function(k){ return Promise.all([KALQ().termine(von, bis), ortLaden(), EBENEN.training ? MSQ().laden().catch(function(){ return null; }) : null]).then(function(x){ var liste = x[0], ort = x[1], ms = x[2];
     s.textContent = "";
     add(s, el("h1", null, "Vereinskalender"), el("p", "lead", k.darf ? "Termine des Vereins, z. B. Ausschusssitzungen. Du kannst Termine anlegen, ändern und löschen – das landet direkt im Outlook-Kalender." : "Termine des Vereins, z. B. Ausschusssitzungen. Du kannst hier nur lesen."));
     var kopf = el("div", "reihe monat"), zur = el("a", "btn klein", "‹ " + MONATE[vm - 1]), vor = el("a", "btn klein", MONATE[nm - 1] + " ›");
@@ -1057,12 +1080,16 @@ function seiteKalender(s, monatTeil){
     add(s, kopf);
     /* Termine im Ort, die in diesen Monat fallen (ohne die, die schon im Vereinskalender stehen) */
     var mVon = von.slice(0, 10), mBis = bis.slice(0, 10);
-    var imOrt = ort && ort.termine ? ort.termine.filter(function(t){ return t.start < mBis && (t.ende || t.start) >= mVon && !ortDoppelt(t, liste); }) : [];
-    if(ort){ var cb = el("input"); cb.type = "checkbox"; cb.checked = ORT_AN;
-      cb.addEventListener("change", function(){ ORT_AN = cb.checked; try{ localStorage.setItem("spfrOrtTermine", ORT_AN ? "an" : "aus"); }catch(_){} route(); });
-      var lo = el("label", "fld haken ortschalter"); add(lo, cb, " Termine im Ort anzeigen (Gemeinde und Homepage, nur ansehen)"); add(s, lo); }
-    if(!ORT_AN) imOrt = [];
-    var ortTage = {}; imOrt.forEach(function(t){ for(var d0 = t.start; d0 <= (t.ende || t.start); d0 = isoPlus(d0, 1)) (ortTage[d0] = ortTage[d0] || []).push(t); });
+    var alleExtern = (ort && ort.termine ? ort.termine : []).concat(EBENEN.training && ms ? trainingImMonat(ms.plan, j, mo) : []);
+    var imOrt = alleExtern.filter(function(t){ var eb = t.quelle === "Spiel" ? "spiele" : (t.quelle === "Training" ? "training" : "ort");
+      return EBENEN[eb] && t.start < mBis && (t.ende || t.start) >= mVon && !ortDoppelt(t, liste); });
+    var leiste = el("div", "ebenen"); add(leiste, el("span", "grau", "Zusätzlich zeigen (nur ansehen):"));
+    [["ort", "🏛 Termine im Ort"], ["spiele", "⚽ Spiele"], ["training", "🏃 Training"]].forEach(function(e){
+      var b = el("button", "ebene" + (EBENEN[e[0]] ? " an" : ""), (EBENEN[e[0]] ? "✓ " : "") + e[1]); b.type = "button"; b.setAttribute("aria-pressed", EBENEN[e[0]] ? "true" : "false");
+      b.addEventListener("click", function(){ EBENEN[e[0]] = !EBENEN[e[0]]; try{ localStorage.setItem(EBENE_KEY[e[0]], EBENEN[e[0]] ? "an" : "aus"); }catch(_){} route(); }); add(leiste, b); });
+    add(s, leiste);
+    if(EBENEN.training && !(ms && ms.plan)) add(s, el("p", "grau", "Training: Die „Übersicht Training_Spiel“ im Team „TEAM Jugend“ ist für dein Konto nicht erreichbar."));
+    var ortTage = {}; imOrt.filter(function(t){ return t.quelle === "Gemeinde" || t.quelle === "Homepage"; }).forEach(function(t){ for(var d0 = t.start; d0 <= (t.ende || t.start); d0 = isoPlus(d0, 1)) (ortTage[d0] = ortTage[d0] || []).push(t); });
     var eintraege = liste.map(function(ev){ var a = kalDatum(ev.start.dateTime); return {art: "verein", ev: ev, iso: a ? a.iso : "", zeit: ev.isAllDay ? "" : (a ? a.zeit : "")}; })
       .concat(imOrt.map(function(t){ return {art: "ort", t: t, iso: t.start, zeit: t.zeit || ""}; }))
       .sort(function(a, b){ return a.iso !== b.iso ? (a.iso < b.iso ? -1 : 1) : (a.zeit < b.zeit ? -1 : (a.zeit > b.zeit ? 1 : 0)); });
@@ -1072,20 +1099,22 @@ function seiteKalender(s, monatTeil){
     eintraege.forEach(function(en){
       if(en.art === "ort"){ var t0 = en.t, d1 = isoZuDatum(t0.start), tg = WT[d1.getDay()] + ", " + t0.start.slice(8, 10) + "." + t0.start.slice(5, 7) + ".";
         if(t0.ende && t0.ende !== t0.start) tg += " – " + t0.ende.slice(8, 10) + "." + t0.ende.slice(5, 7) + ".";
-        var ti = el("td"); add(ti, el("span", "chip quelle " + (t0.quelle === "Gemeinde" ? "gem" : "hp"), t0.quelle === "Gemeinde" ? "🏛 Gemeinde" : "⚽ Homepage"), " ", el("b", null, t0.titel));
+        var QU = {Gemeinde: ["gem", "🏛 Gemeinde"], Homepage: ["hp", "🌐 Homepage"], Spiel: ["sp", "⚽ Spiel"], Training: ["tr", "🏃 Training"]}[t0.quelle] || ["hp", t0.quelle];
+        var ti = el("td", "termin"); add(ti, el("span", "chip quelle " + QU[0], QU[1]), " ", el("b", null, t0.quelle === "Training" ? t0.titel.replace(/^Training /, "") : t0.titel));
+        if(t0.quelle === "Spiel" && t0.link){ var fl2 = el("a", "notiz", "fussball.de ›"); fl2.href = t0.link; fl2.target = "_blank"; fl2.rel = "noopener"; add(ti, " ", fl2); }
         if(t0.ort) add(ti, el("div", "notiz ortm", "📍 " + t0.ort)); if(t0.veranstalter) add(ti, el("div", "notiz", t0.veranstalter));
         var akt = el("td", "z knoepfe");
         add(akt, btn("klein", "📅 .ics", (function(t1){ return function(){ icsLaden(t1.start + " " + t1.titel.replace(/[\\/:*?"<>|]/g, "").slice(0, 40) + ".ics", icsText([icsAusOrt(t1)], t1.titel)); }; })(t0)));
-        if(k.darf) add(akt, btn("klein", "→ Vereinskalender", (function(t1){ return function(){ var z = /^(\d{2}:\d{2})(?:–(\d{2}:\d{2}))?/.exec(t1.zeit || "");
+        if(k.darf && t0.quelle !== "Training") add(akt, btn("klein", "→ Vereinskalender", (function(t1){ return function(){ var z = /(\d{2}:\d{2})(?:–(\d{2}:\d{2}))?/.exec(t1.zeit || "");
           kalBearbeiten({vorlage: true, subject: t1.titel, isAllDay: !z, start: {dateTime: t1.start + "T" + (z ? z[1] : "00:00") + ":00"}, end: {dateTime: (z ? t1.start : isoPlus(t1.ende || t1.start, 1)) + "T" + (z ? (z[2] || pad(Math.min(23, +z[1].slice(0, 2) + 2)) + z[1].slice(2)) : "00:00") + ":00"},
-            location: {displayName: t1.ort}, bodyPreview: [t1.veranstalter, "Übernommen aus: " + (t1.quelle === "Gemeinde" ? "Gemeinde Schneeberg" : "Homepage")].filter(Boolean).join("\n")}); }; })(t0)));
-        var tro = el("tr", "imort"); add(tro, el("td", null, tg), el("td", null, t0.zeit || "ganztägig"), ti, el("td", "ort", t0.ort), akt); add(tb, tro); return; }
+            location: {displayName: t1.ort}, bodyPreview: [t1.veranstalter, "Übernommen aus: " + ({Gemeinde: "Gemeinde Schneeberg", Homepage: "Homepage", Spiel: "fussball.de", Training: "Übersicht Training_Spiel"}[t1.quelle] || t1.quelle)].filter(Boolean).join("\n")}); }; })(t0)));
+        var tro = el("tr", "imort" + (t0.abgesetzt ? " abgesetzt" : "") + (t0.quelle === "Training" ? " training" : "")); add(tro, el("td", null, tg), el("td", null, t0.zeit || (t0.quelle === "Training" ? "Zeit offen" : "ganztägig")), ti, el("td", "ort", t0.ort), akt); add(tb, tro); return; }
       var ev = en.ev;
       var a = kalDatum(ev.start.dateTime), e = kalDatum(ev.end.dateTime); if(!a) return;
       var d = isoZuDatum(a.iso), zeit = ev.isAllDay ? "ganztägig" : a.zeit + (e ? "–" + e.zeit : "");
       var tag = WT[d.getDay()] + ", " + pad(a.t) + "." + pad(a.mo) + ".";
       if(ev.isAllDay && e && isoPlus(a.iso, 1) !== e.iso){ var ende = isoZuDatum(isoPlus(e.iso, -1)); tag += " – " + pad(ende.getDate()) + "." + pad(ende.getMonth() + 1) + "."; }
-      var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var fe = festVonTitel(ev.subject); if(fe){ var fl = el("a", "chip festlink", fe.sym + " " + fe.name + " " + a.j + " ›"); fl.href = vaLink(fe, a.j); add(tit, " ", fl); } var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview)); if(ortTage[a.iso]) add(tit, el("div", "notiz konflikt", "⚠ Am selben Tag im Ort: " + ortTage[a.iso].map(function(x){ return x.titel; }).join(", ")));
+      var tit = el("td", "termin"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var fe = festVonTitel(ev.subject); if(fe){ var fl = el("a", "chip festlink", fe.sym + " " + fe.name + " " + a.j + " ›"); fl.href = vaLink(fe, a.j); add(tit, " ", fl); } var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview)); if(ortTage[a.iso]) add(tit, el("div", "notiz konflikt", "⚠ Am selben Tag im Ort: " + ortTage[a.iso].map(function(x){ return x.titel; }).join(", ")));
       var tr = el("tr"); add(tr, el("td", null, tag), el("td", null, zeit), tit, el("td", "ort", ortT),
         add(el("td", "z"), k.darf ? btn("klein", "Ändern", function(){ kalBearbeiten(ev); }) : null));
       add(tb, tr); });
