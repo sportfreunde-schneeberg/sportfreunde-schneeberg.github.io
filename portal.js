@@ -1525,10 +1525,12 @@ var BwLive = {
         var bdatei = wurzel.filter(function(x){ return x.file && /^banden_bestand\.xlsx$/i.test(x.name); })[0];
         var bestand = bdatei ? gf("/drives/" + d + "/root:/" + pfadK(PR.basis + "/" + BAND + "/" + bdatei.name) + "?$select=id").then(function(it){
           var wb = "/drives/" + d + "/items/" + it.id + "/workbook";
-          return gf(wb + blattPfad("Bestand") + "/usedRange(valuesOnly=false)?$select=address,values").then(function(b){ return {wb: wb, datei: bdatei, werte: ausrichten(b.address, b.values || [])}; }); }).catch(function(){ return null; }) : Promise.resolve(null);
+          return Promise.all([gf(wb + blattPfad("Bestand") + "/usedRange(valuesOnly=false)?$select=address,values"),
+            gf(wb + blattPfad("Partner") + "/usedRange(valuesOnly=false)?$select=address,values").catch(function(){ return null; })]).then(function(b){
+            return {wb: wb, datei: bdatei, werte: ausrichten(b[0].address, b[0].values || []), partner: b[1] ? ausrichten(b[1].address, b[1].values || []) : null}; }); }).catch(function(){ return null; }) : Promise.resolve(null);
         var kand = erinnerungenLaden().then(function(E){ return (E.aufgaben || []).filter(function(a){ return /bande/i.test(a.titel); }); }).catch(function(){ return []; });
         return Promise.all([liste, bestand, kand]).then(function(z){ return {wurzel: wurzel, jahr: jahr, jahrDateien: r[0], vertraege: r[1], excel: xl, liste: z[0], bestand: z[1], kandidaten: z[2]}; }); }); }); }); },
-  schreiben: function(wb, adresse, werte){ return gf(wb + blattPfad("Bestand") + "/range(address='" + adresse + "')", {method: "PATCH", body: {values: werte}}); }
+  schreiben: function(wb, adresse, werte, blatt){ return gf(wb + blattPfad(blatt || "Bestand") + "/range(address='" + adresse + "')", {method: "PATCH", body: {values: werte}}); }
 };
 var BwTest = { laden: function(){ var f = function(n, ordner){ return {name: n, webUrl: "#", folder: ordner ? {} : undefined, file: ordner ? undefined : {}, lastModifiedDateTime: "2026-10-19T10:00:00Z"}; };
   return Promise.resolve({wurzel: [f("Bandenwerbung.docx"), f("2026 Rechnungen", 1), f("2025 Rechnungen", 1), f("neu ab 2024", 1)], jahr: f("2026 Rechnungen", 1),
@@ -1539,9 +1541,11 @@ var BwTest = { laden: function(){ var f = function(n, ordner){ return {name: n, 
       ["Bande 2", "Firma C (Beispiel)", "", "", "", "Amorbach", 3, "35,00", 105, 19.95, 124.95, "", "", "", "", 2020003]]},
     bestand: {wb: "test", datei: f("Banden_Bestand.xlsx"), werte: (function(){ var w = [["Banden – Bestand"], [""], [], ["Nr", "Standort", "Art", "Länge (m)", "Höhe (m)", "Status", "Werbepartner", "Bemerkung"]];
       w.push([1, "Längsseite Hütte", "Bande", 3, 0.8, "belegt", "Firma A (Beispiel)", ""], [2, "Längsseite Hütte", "Bande", 3, 0.8, "frei", "", ""], [3, "Hütte (Lager)", "Bande", 3, 0.8, "Reserve", "", "Beispiel"]);
-      for(var i = 4; i <= 8; i++) w.push([i, "", "", "", "", "", "", ""]); return w; })()},
+      for(var i = 4; i <= 8; i++) w.push([i, "", "", "", "", "", "", ""]); return w; })(),
+      partner: [["Werbepartner"], [""], [], ["Nr", "Firma", "Ort", "Bemerkung", "2024", "2025", "2026", "2027", "2028"],
+        [1, "Firma A (Beispiel)", "Schneeberg", "", "x", "", "x", "", ""], [2, "Firma B (Beispiel)", "Miltenberg", "", "", "x", "", "", ""], [3, "Firma C (Beispiel)", "Amorbach", "", "", "", "", "", ""], [4, "", "", "", "", "", "", "", ""]]},
     kandidaten: [{titel: "Bandenwerbung", unteraufgaben: [{titel: "Firma X (Beispiel)", unteraufgaben: []}, {titel: "Firma Y (Beispiel)", unteraufgaben: []}]}]}); },
-  schreiben: function(wb, adresse, werte){ window.__banden = (window.__banden || []).concat([{adresse: adresse, werte: werte}]); return Promise.resolve(); } };
+  schreiben: function(wb, adresse, werte, blatt){ window.__banden = (window.__banden || []).concat([{blatt: blatt || "Bestand", adresse: adresse, werte: werte}]); return Promise.resolve(); } };
 function BWQ(){ return TEST ? BwTest : BwLive; }
 function bandenBestand(s, D){
   var box = el("div"); add(s, box);
@@ -1601,6 +1605,49 @@ function bandenBestand(s, D){
     });
   }
 }
+/* Werbepartner-Übersicht mit Jahresspalten „Partner des Monats“ (Banden_Bestand.xlsx, Blatt „Partner“: Kopf Zeile 4, Nr | Firma | Ort | Bemerkung | Jahre …) */
+function bandenPartner(s, D){
+  var B = D.bestand, box = el("div"); add(s, box);
+  add(box, el("h2", null, "Werbepartner und „Partner des Monats“"));
+  if(!B || !B.partner){ add(box, el("p", "lead", "Das Blatt „Partner“ in Banden_Bestand.xlsx fehlt.")); return; }
+  var w = B.partner, kopf = (w[3] || []).map(txt), jahre = [], schreibt = darf("verwaltung"), dieses = new Date().getFullYear();
+  kopf.forEach(function(h, i){ if(/^\d{4}$/.test(h)) jahre.push({j: +h, sp: i}); });
+  var spB = String.fromCharCode(65 + Math.max.apply(null, jahre.map(function(x){ return x.sp; }).concat([3])));
+  var zeilen = []; for(var z = 5; z <= w.length; z++){ var nr = zelle(w, z, 0); if(typeof nr !== "number") continue;
+    zeilen.push({zeile: z, nr: nr, firma: txt(zelle(w, z, 1)), ort: txt(zelle(w, z, 2)), bem: txt(zelle(w, z, 3)), x: jahre.map(function(j){ return /^x|✓|ja/i.test(txt(zelle(w, z, j.sp))); })}); }
+  var aktiv = zeilen.filter(function(x){ return x.firma; });
+  add(box, el("p", "grau", "Alle Werbepartner (vorbelegt aus der Jahresliste 2026). Jahr antippen = in diesem Jahr als „Partner des Monats“ im WhatsApp-Kanal vorgestellt."));
+  if(schreibt) add(box, add(el("div", "reihe"), btn("", "+ Werbepartner ergänzen", function(){ var z0 = zeilen.filter(function(x){ return !x.firma; })[0]; if(!z0){ zeigeToast("Keine freie Zeile mehr – bitte in Excel Zeilen ergänzen."); return; } dialog(z0); })));
+  var t = el("table", "matrix partner"), tb = el("tbody"), k = el("tr");
+  add(k, el("th", null, "Firma")); jahre.forEach(function(j){ add(k, el("th", "m jahr" + (j.j === dieses ? " heute" : ""), String(j.j))); }); add(t, add(el("thead"), k), tb);
+  aktiv.forEach(function(x){ var tr = el("tr"), nm = el("th"); add(nm, el("b", null, x.firma), el("small", null, [x.ort, x.bem].filter(Boolean).join(" · ")));
+    if(schreibt){ nm.classList.add("klickbar"); nm.title = "Ändern"; nm.addEventListener("click", function(){ dialog(x); }); }
+    add(tr, nm);
+    jahre.forEach(function(j, i){ var td = el("td", "m jahr" + (j.j === dieses ? " heute" : "")), an = x.x[i];
+      if(schreibt){ var b = el("button", "haken" + (an ? " an" : ""), an ? "✓" : ""); b.type = "button"; b.title = x.firma + " " + j.j + (an ? ": war Partner des Monats" : ": noch nicht");
+        b.addEventListener("click", function(){ b.disabled = true; var col = String.fromCharCode(65 + j.sp);
+          BWQ().schreiben(B.wb, col + x.zeile, [[an ? "" : "x"]], "Partner").then(function(){ x.x[i] = !an; zeigeToast(x.firma + " " + j.j + (an ? " entfernt" : " abgehakt ✓")); route(); }).catch(function(e){ b.disabled = false; zeigeToast(fehlerText(e)); }); });
+        add(td, b); } else add(td, an ? el("span", "haken an", "✓") : el("span", "leer", "·"));
+      add(tr, td); });
+    add(tb, tr); });
+  add(box, add(el("div", "scroll"), t));
+  /* Vorschlag: wer war dieses Jahr noch nicht dran (die mit den wenigsten Haken zuerst) */
+  var ji = jahre.map(function(j){ return j.j; }).indexOf(dieses);
+  if(ji > -1){ var noch = aktiv.filter(function(x){ return !x.x[ji]; }).sort(function(a, b){ return a.x.filter(Boolean).length - b.x.filter(Boolean).length; });
+    add(box, add(el("p", "hinweis"), el("b", null, "Partner des Monats " + dieses + ": "), (aktiv.length - noch.length) + " von " + aktiv.length + " vorgestellt. ",
+      noch.length ? "Noch nicht dran (wenigste Vorstellungen zuerst): " + noch.slice(0, 5).map(function(x){ return x.firma; }).join(", ") + (noch.length > 5 ? " …" : "") : "Alle waren dran.")); }
+  function dialog(x){
+    var dl = el("dialog"), f = el("form", "karte"); f.noValidate = true;
+    function feld(t0, v, cls){ var i = el("input"); i.value = v || ""; var l = el("label", "fld" + (cls ? " " + cls : ""), t0); add(l, i); l._i = i; return l; }
+    var fF = feld("Firma", x.firma, "w2"), fO = feld("Ort", x.ort), fB = feld("Bemerkung", x.bem, "w2");
+    var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
+    add(f, el("h2", null, x.firma ? "Werbepartner ändern" : "Werbepartner ergänzen"), add(el("div", "formular"), fF, fO, fB), add(el("div", "reihe"), ok, btn("", "Abbrechen", function(){ dl.close(); dl.remove(); })));
+    add(dl, f); document.body.appendChild(dl); dl.showModal(); fF._i.focus();
+    f.addEventListener("submit", function(ev){ ev.preventDefault(); if(!fF._i.value.trim()){ zeigeToast("Bitte die Firma eintragen."); return; } ok.disabled = true;
+      BWQ().schreiben(B.wb, "B" + x.zeile + ":D" + x.zeile, [[fF._i.value.trim(), fO._i.value.trim(), fB._i.value.trim()]], "Partner").then(function(){ dl.close(); dl.remove(); zeigeToast("Gespeichert ✓"); route(); })
+        .catch(function(e){ ok.disabled = false; add(f, el("div", "fehler", fehlerText(e))); }); });
+  }
+}
 function bwZahl(v){ if(typeof v === "number") return v; var n = eingabeZahl(txt(v)); return n == null ? null : n; }
 function seiteBandenwerbung(s){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Bandenwerbung"]]);
@@ -1612,19 +1659,34 @@ function seiteBandenwerbung(s){
     var link = function(x, text){ if(!x) return el("span", "grau", text + " (nicht gefunden)"); var a = el("a", null, text); a.href = x.webUrl; a.target = "_blank"; a.rel = "noopener"; return a; };
     add(s, el("h1", null, "🪧 Bandenwerbung"), el("p", "lead", "Werbebanden am neuen Sportplatz. Unterlagen im Team „Sportfreunde Schneeberg 1928 e.V.“ › Schriftführer › 06_Bandenwerbung. Bearbeitet wird in Word und Excel, das Portal zeigt den Stand."));
 
-    /* Ablauf – aus den vorhandenen Dateien abgeleitet */
-    var k = el("div", "karte anleitung"); add(s, k);
-    add(k, el("h2", null, "So wird eine Bandenwerbung aufgesetzt"), el("p", "grau", "Abgeleitet aus den vorhandenen Dateien (Vorlage, Jahreslisten, Serienbriefe 2024–2026)."));
-    function li(teile){ var l = el("li"); teile.forEach(function(x){ add(l, typeof x === "string" ? document.createTextNode(x) : x); }); return l; }
-    var ol = el("ol"); add(k, ol);
-    add(ol, li([el("b", null, "Vertrag: "), "Word-Vorlage ", link(vorlage, "Bandenwerbung.docx"), " öffnen, eine Kopie speichern und Firma, Anschrift und Preis eintragen. Laut Vorlage: Werbefläche im Innenraum an der Barriere, 1 × 3 m breit und 0,8 m hoch, Pacht je laufendem Meter und Jahr zzgl. MwSt., Laufzeit 5 Jahre, danach jeweils 1 Jahr Verlängerung ohne Kündigung, Zahlung netto binnen 14 Tagen nach Rechnung, Beschriftung macht der Werbepartner."]),
-      li([el("b", null, "Unterschreiben und ablegen: "), "zwei Ausfertigungen unterschreiben (Verein und Werbepartner), den Scan im Ordner „neu ab 2024“ ablegen – so wie bei den Verträgen von 2024 und 2026."]),
-      li([el("b", null, "In die Jahresliste eintragen: "), "in ", link(D.excel, D.excel ? D.excel.name : "Bandenwerbung JJJJ.xlsx"), " (Blatt „" + (D.liste ? D.liste.blatt : "Rechung") + "“) eine Zeile: Firma, Anschrift, laufende Meter (lfdm), Preis je lfdm, Netto, MwSt., Brutto, Rechnungsnummer."]),
-      li([el("b", null, "Rechnungen: "), "der Serienbrief ", link(serien, serien ? serien.name : "Serienbrief Rechnung JJJJ.docx"), " nimmt die Jahresliste als Datenquelle und erzeugt je Werbepartner eine Rechnung (Zeitraum 1. Juni bis 31. Mai, z. B. 2026 am 19.10. erstellt). Als PDF speichern und verschicken."]),
-      li([el("b", null, "Neues Jahr: "), "Ordner „JJJJ Rechnungen“ anlegen, Jahresliste und Serienbrief vom Vorjahr hineinkopieren, Datum, Zeitraum und Rechnungsnummern anpassen. ", el("span", "grau", "(Vorschlag – so sehen die Ordner 2024–2026 aus.)")]));
+    /* Ablauf (Entwurf, 24.11.2026): Schritte laut Verwaltung (Besprechung 24.11.2026), ergänzt um das, was die vorhandenen Dateien zeigen. Offene Punkte stehen am Ende. */
+    var frei = 0, res = 0; (function(){ var w0 = D.bestand && D.bestand.werte || []; for(var z = 5; z <= w0.length; z++){ var st = txt(zelle(w0, z, 5)); if(/^frei/i.test(st)) frei++; if(/^reserve/i.test(st)) res++; } })();
+    var k = el("details", "karte anleitung zu"); k.open = true; add(s, k);
+    add(k, el("summary", "titel", "🧭 Ablauf einer neuen Bandenwerbung (Entwurf)"), el("p", "grau", "Entwurf zur Abstimmung im Ausschuss. „laut Verwaltung“ = so besprochen, „aus den Dateien“ = so wurde es bisher gemacht, „Vorschlag“ = noch zu entscheiden."));
+    function schritt(nr, titel, quelle, teile){ var d = el("div", "bwschritt"); add(d, el("div", "nr", String(nr)));
+      var t = el("div"); add(t, el("b", null, titel), el("span", "quelle", quelle)); teile.forEach(function(x){ add(t, typeof x === "string" ? el("p", null, x) : x); }); add(d, t); return d; }
+    var serien = D.jahrDateien.filter(function(x){ return x.file && /serienbrief/i.test(x.name) && /\.docx$/i.test(x.name); })[0];
+    add(k,
+      schritt(1, "Freie Bande prüfen", "laut Verwaltung", ["Gibt es eine freie Tafel am Platz oder einen Rohling in Reserve? Stand jetzt laut Bestand unten: " + frei + " frei am Platz, " + res + " in Reserve (Bestand noch nicht vollständig erfasst)."]),
+      schritt(2, "Angebot an den Interessenten", "laut Verwaltung · Preise aus den Dateien", ["Pacht je laufendem Meter und Jahr zzgl. MwSt. (Vorlage: 35 €, Jahresliste 2026: 33,23 € bis 50 €). Zusätzlich einmalig die Kosten für die Bedruckung (Betrag noch offen, siehe unten)."]),
+      schritt(3, "Vertrag abschließen", "aus den Dateien", [add(el("p"), "Vorlage ", link(vorlage, "Bandenwerbung.docx"), " ausfüllen (Fläche, Preis, 5 Jahre Laufzeit, danach jährliche Verlängerung). Zwei Ausfertigungen unterschreiben, den Scan in „neu ab 2024“ ablegen.")]),
+      schritt(4, "Druckdatei vom Werbepartner", "laut Verwaltung", ["Der Werbepartner (Pächter) stellt eine hochauflösende Datei bereit. Sie geht an die Druckerei Stumpf in Buch-Zell."]),
+      schritt(5, "Druckerei: abholen, bedrucken, liefern", "laut Verwaltung", ["Die Druckerei Stumpf holt den Rohling (die Bande) ab, bedruckt ihn und liefert ihn zurück."]),
+      schritt(6, "Montage durch den Verein", "laut Verwaltung", ["Wir montieren die Bande am Platz. Danach im Bestand unten die Bande auf „belegt“ setzen und den Werbepartner eintragen."]),
+      schritt(7, "Jahresliste und Rechnung", "aus den Dateien", [add(el("p"), "Zeile in ", link(D.excel, D.excel ? D.excel.name : "Bandenwerbung JJJJ.xlsx"), " ergänzen. Die Rechnungen kommen gesammelt per ", link(serien, serien ? serien.name : "Serienbrief"), " (Zeitraum 1. Juni bis 31. Mai, 2026 am 19.10. erstellt).")]),
+      schritt(8, "„Partner des Monats“ im WhatsApp-Kanal", "laut Verwaltung", ["Monatlich einen Werbepartner im WhatsApp-Kanal vorstellen und in der Liste unten im passenden Jahr abhaken. Vorschläge für den nächsten Partner stehen unter der Liste."]));
+    var offen = el("ul", "kandidaten");
+    ["Wie hoch sind die Druckkosten und wer zahlt sie (Werbepartner direkt an die Druckerei oder über den Verein)?",
+     "Welches Dateiformat und welche Auflösung braucht die Druckerei Stumpf? Wer schickt die Datei hin?",
+     "Wer ist Ansprechpartner für Druckerei und Montage im Verein?",
+     "Erstes Jahr: volle Jahrespacht oder anteilig ab Montage?",
+     "Wer postet den „Partner des Monats“ und nach welcher Reihenfolge?"].forEach(function(x){ add(offen, el("li", null, x)); });
+    add(k, el("h3", null, "Offene Punkte (bitte im Ausschuss klären)"), offen);
+    add(k, el("p", "grau", "Neues Jahr (Vorschlag, so sehen die Ordner 2024–2026 aus): Ordner „JJJJ Rechnungen“ anlegen, Jahresliste und Serienbrief vom Vorjahr kopieren, Datum, Zeitraum und Rechnungsnummern anpassen."));
 
     /* Bestand: wie viele Banden, welche Längen, was liegt in Reserve */
     bandenBestand(s, D);
+    bandenPartner(s, D);
 
     /* Werbepartner aus der neuesten Jahresliste */
     add(s, el("h2", null, "Werbepartner " + (D.jahr ? D.jahr.name.replace(/\D.*$/, "") : "") + (D.excel ? " · aus „" + D.excel.name + "“" : "")));

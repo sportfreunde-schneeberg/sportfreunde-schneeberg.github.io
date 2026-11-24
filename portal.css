@@ -387,3 +387,17 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 details.anleitung.zu > summary.titel{font-size:17px;font-weight:700;cursor:pointer;padding:2px 0}
 details.anleitung.zu[open] > summary.titel{margin-bottom:10px}
 .kandidaten{margin:6px 0 4px 20px;padding:0}.kandidaten li{margin:4px 0}
+/* Bandenwerbung: Ablauf-Schritte und Partner-Jahresmatrix */
+.bwschritt{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.bwschritt .nr{flex:0 0 30px;height:30px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:800}
+.bwschritt b{display:block;font-size:15.5px}
+.bwschritt .quelle{display:inline-block;font-size:11.5px;color:var(--gold);font-weight:700;margin:2px 0 0}
+.bwschritt p{margin:4px 0 0;color:var(--ink)}
+.matrix.partner .m.jahr{width:62px}
+.matrix.partner .heute{background:color-mix(in srgb,var(--gold) 10%,var(--surface))}
+.matrix.partner th.klickbar{cursor:pointer}
+.haken{display:inline-grid;place-items:center;width:34px;height:32px;border-radius:8px;border:2px solid var(--line);background:var(--surface);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.haken.an{background:var(--green);border-color:var(--green)}
+span.haken{cursor:default}
+.haken:active{transform:translateY(1px)}
+@media (max-width:640px){.matrix.partner .m.jahr{width:40px}.haken{width:30px;height:30px}}
