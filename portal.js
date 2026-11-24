@@ -997,6 +997,33 @@ function isoPlus(iso, tage){ var d = isoZuDatum(iso); d.setDate(d.getDate() + ta
    Der Mac holt sie alle 4 Stunden (Tools/termine_extern.py) und legt sie im Team Liegenschaften ab: General/Kalender/Termine_im_Ort.json.
    Ohne Zugriff auf die Datei zeigt der Kalender einfach nur die Vereinstermine. */
 var ORT_PFAD = "General/Kalender/Termine_im_Ort.json", ortCache = null;
+/* Abo-Link der Gemeinde (Odenwald-Allianz, nur Schneeberg), geprüft am 24.11.2026 */
+var ORT_ABO = "https://www.odenwald-allianz.de/kalender/feed.php?kommune=schneeberg";
+/* .ics-Datei (RFC 5545) erzeugen und herunterladen. Termine: {uid, titel, start "JJJJ-MM-TT", ende (letzter Tag), von "HH:MM", bis "HH:MM", ort, notiz} */
+function icsEsc(t){ return String(t || "").replace(/\r\n|\r/g, "\n").replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
+function icsFalten(z){ var out = [], r = z; while(r.length > 60){ out.push(r.slice(0, 60)); r = " " + r.slice(60); } /* 60 Zeichen, damit auch Umlaute unter 75 Byte bleiben */ out.push(r); return out.join("\r\n"); }
+function icsText(liste, name){
+  var jetzt = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z", z = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Sportfreunde Schneeberg 1928//Vereinsportal//DE", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:" + icsEsc(name),
+    "BEGIN:VTIMEZONE", "TZID:Europe/Berlin", "BEGIN:DAYLIGHT", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200", "TZNAME:CEST", "DTSTART:19700329T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET", "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD", "END:VTIMEZONE"];
+  var d = function(iso){ return iso.replace(/-/g, ""); }, zt = function(h){ return h.replace(":", "") + "00"; };
+  liste.forEach(function(t){ var ende = t.ende || t.start;
+    z.push("BEGIN:VEVENT", "UID:" + t.uid, "DTSTAMP:" + jetzt, icsFalten("SUMMARY:" + icsEsc(t.titel)));
+    if(t.von){ var bis = t.bis || (("0" + Math.min(23, +t.von.slice(0, 2) + 2)).slice(-2) + t.von.slice(2));
+      z.push("DTSTART;TZID=Europe/Berlin:" + d(t.start) + "T" + zt(t.von), "DTEND;TZID=Europe/Berlin:" + d(ende) + "T" + zt(bis)); }
+    else z.push("DTSTART;VALUE=DATE:" + d(t.start), "DTEND;VALUE=DATE:" + d(isoPlus(ende, 1)));
+    if(t.ort) z.push(icsFalten("LOCATION:" + icsEsc(t.ort))); if(t.notiz) z.push(icsFalten("DESCRIPTION:" + icsEsc(t.notiz)));
+    z.push("END:VEVENT"); });
+  z.push("END:VCALENDAR"); return z.join("\r\n") + "\r\n"; }
+function icsLaden(dateiname, text){ var b = new Blob([text], {type: "text/calendar;charset=utf-8"}), a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = dateiname; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+function icsAusOrt(t){ var z = /^(\d{2}:\d{2})(?:–(\d{2}:\d{2}))?/.exec(t.zeit || "");
+  return {uid: "ort-" + t.start + "-" + t.titel.replace(/[^a-z0-9]/gi, "").slice(0, 30) + "@1928schneeberg.de", titel: t.titel, start: t.start, ende: t.ende, von: z ? z[1] : "", bis: z && z[2] ? z[2] : "",
+    ort: t.ort, notiz: [t.veranstalter, "Quelle: " + (t.quelle === "Gemeinde" ? "Gemeinde Schneeberg (Odenwald-Allianz)" : "Homepage 1928schneeberg.de")].filter(Boolean).join("\n")}; }
+function icsAusOutlook(ev){ var a = kalDatum(ev.start.dateTime), e = kalDatum(ev.end.dateTime); if(!a) return null;
+  return {uid: (ev.id || a.iso + ev.subject).replace(/[^a-z0-9]/gi, "").slice(-60) + "@vereinskalender.1928schneeberg.de", titel: ev.subject || "(ohne Titel)", start: a.iso,
+    ende: ev.isAllDay ? (e ? isoPlus(e.iso, -1) : a.iso) : (e ? e.iso : a.iso), von: ev.isAllDay ? "" : a.zeit, bis: ev.isAllDay || !e ? "" : e.zeit,
+    ort: (ev.location && ev.location.displayName) || "", notiz: ev.bodyPreview || ""}; }
 function ortLaden(){
   if(ortCache) return ortCache;
   if(TEST){ var j = new Date().getFullYear(), m = pad(new Date().getMonth() + 1);
@@ -1039,15 +1066,20 @@ function seiteKalender(s, monatTeil){
     var eintraege = liste.map(function(ev){ var a = kalDatum(ev.start.dateTime); return {art: "verein", ev: ev, iso: a ? a.iso : "", zeit: ev.isAllDay ? "" : (a ? a.zeit : "")}; })
       .concat(imOrt.map(function(t){ return {art: "ort", t: t, iso: t.start, zeit: t.zeit || ""}; }))
       .sort(function(a, b){ return a.iso !== b.iso ? (a.iso < b.iso ? -1 : 1) : (a.zeit < b.zeit ? -1 : (a.zeit > b.zeit ? 1 : 0)); });
-    if(!eintraege.length){ add(s, el("p", "lead", "Keine Termine in diesem Monat.")); return; }
+    if(!eintraege.length){ add(s, el("p", "lead", "Keine Termine in diesem Monat.")); kalAnleitung(s); return; }
     var t = el("table", "tabelle kal"), tb = el("tbody");
-    add(t, add(el("thead"), add(el("tr"), el("th", null, "Datum"), el("th", null, "Uhrzeit"), el("th", null, "Termin"), el("th", "ort", "Ort"), k.darf ? el("th", null, "") : null)), tb);
+    add(t, add(el("thead"), add(el("tr"), el("th", null, "Datum"), el("th", null, "Uhrzeit"), el("th", null, "Termin"), el("th", "ort", "Ort"), el("th", null, ""))), tb);
     eintraege.forEach(function(en){
       if(en.art === "ort"){ var t0 = en.t, d1 = isoZuDatum(t0.start), tg = WT[d1.getDay()] + ", " + t0.start.slice(8, 10) + "." + t0.start.slice(5, 7) + ".";
         if(t0.ende && t0.ende !== t0.start) tg += " – " + t0.ende.slice(8, 10) + "." + t0.ende.slice(5, 7) + ".";
         var ti = el("td"); add(ti, el("span", "chip quelle " + (t0.quelle === "Gemeinde" ? "gem" : "hp"), t0.quelle === "Gemeinde" ? "🏛 Gemeinde" : "⚽ Homepage"), " ", el("b", null, t0.titel));
         if(t0.ort) add(ti, el("div", "notiz ortm", "📍 " + t0.ort)); if(t0.veranstalter) add(ti, el("div", "notiz", t0.veranstalter));
-        var tro = el("tr", "imort"); add(tro, el("td", null, tg), el("td", null, t0.zeit || "ganztägig"), ti, el("td", "ort", t0.ort), k.darf ? el("td") : null); add(tb, tro); return; }
+        var akt = el("td", "z knoepfe");
+        add(akt, btn("klein", "📅 .ics", (function(t1){ return function(){ icsLaden(t1.start + " " + t1.titel.replace(/[\\/:*?"<>|]/g, "").slice(0, 40) + ".ics", icsText([icsAusOrt(t1)], t1.titel)); }; })(t0)));
+        if(k.darf) add(akt, btn("klein", "→ Vereinskalender", (function(t1){ return function(){ var z = /^(\d{2}:\d{2})(?:–(\d{2}:\d{2}))?/.exec(t1.zeit || "");
+          kalBearbeiten({vorlage: true, subject: t1.titel, isAllDay: !z, start: {dateTime: t1.start + "T" + (z ? z[1] : "00:00") + ":00"}, end: {dateTime: (z ? t1.start : isoPlus(t1.ende || t1.start, 1)) + "T" + (z ? (z[2] || pad(Math.min(23, +z[1].slice(0, 2) + 2)) + z[1].slice(2)) : "00:00") + ":00"},
+            location: {displayName: t1.ort}, bodyPreview: [t1.veranstalter, "Übernommen aus: " + (t1.quelle === "Gemeinde" ? "Gemeinde Schneeberg" : "Homepage")].filter(Boolean).join("\n")}); }; })(t0)));
+        var tro = el("tr", "imort"); add(tro, el("td", null, tg), el("td", null, t0.zeit || "ganztägig"), ti, el("td", "ort", t0.ort), akt); add(tb, tro); return; }
       var ev = en.ev;
       var a = kalDatum(ev.start.dateTime), e = kalDatum(ev.end.dateTime); if(!a) return;
       var d = isoZuDatum(a.iso), zeit = ev.isAllDay ? "ganztägig" : a.zeit + (e ? "–" + e.zeit : "");
@@ -1055,12 +1087,46 @@ function seiteKalender(s, monatTeil){
       if(ev.isAllDay && e && isoPlus(a.iso, 1) !== e.iso){ var ende = isoZuDatum(isoPlus(e.iso, -1)); tag += " – " + pad(ende.getDate()) + "." + pad(ende.getMonth() + 1) + "."; }
       var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var fe = festVonTitel(ev.subject); if(fe){ var fl = el("a", "chip festlink", fe.sym + " " + fe.name + " " + a.j + " ›"); fl.href = vaLink(fe, a.j); add(tit, " ", fl); } var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview)); if(ortTage[a.iso]) add(tit, el("div", "notiz konflikt", "⚠ Am selben Tag im Ort: " + ortTage[a.iso].map(function(x){ return x.titel; }).join(", ")));
       var tr = el("tr"); add(tr, el("td", null, tag), el("td", null, zeit), tit, el("td", "ort", ortT),
-        k.darf ? add(el("td", "z"), btn("klein", "Ändern", function(){ kalBearbeiten(ev); })) : null);
+        add(el("td", "z"), k.darf ? btn("klein", "Ändern", function(){ kalBearbeiten(ev); }) : null));
       add(tb, tr); });
     add(s, add(el("div", "scroll"), t));
+    kalAnleitung(s);
   }); }).catch(function(e){ fehlerZeigen(kalFehler(e)); });
 }
+/* Unter dem Kalender: Export als .ics und Anleitung zum Abonnieren */
+function kalAnleitung(s){
+  var box = el("div", "karte anleitung");
+  var exp = btn("", "📅 Vereinstermine der nächsten 12 Monate als .ics", function(){ exp.disabled = true;
+    var h = new Date(), von = h.getFullYear() + "-" + pad(h.getMonth() + 1) + "-01T00:00:00", bis = (h.getFullYear() + 1) + "-" + pad(h.getMonth() + 1) + "-01T00:00:00";
+    KALQ().termine(von, bis).then(function(l){ var liste = l.map(icsAusOutlook).filter(Boolean);
+      if(!liste.length){ zeigeToast("Keine Termine in den nächsten 12 Monaten."); return; }
+      icsLaden("Vereinskalender Spfr 1928.ics", icsText(liste, "Vereinskalender Spfr 1928")); zeigeToast(liste.length + " Termine exportiert ✓"); })
+      .catch(function(e){ zeigeToast(kalFehler(e)); }).then(function(){ exp.disabled = false; }); });
+  var abo = el("a", "btn", "🏛 Gemeinde-Kalender abonnieren"); abo.href = ORT_ABO.replace(/^https:/, "webcal:");
+  var kopie = btn("klein", "Abo-Link kopieren", function(){ (navigator.clipboard ? navigator.clipboard.writeText(ORT_ABO) : Promise.reject()).then(function(){ zeigeToast("Link kopiert ✓"); }, function(){ prompt("Abo-Link der Gemeinde:", ORT_ABO); }); });
+  function schritt(titel, teile){ var d = el("details"), su = el("summary", null, titel); add(d, su); teile.forEach(function(x){ add(d, typeof x === "string" ? el("p", null, x) : x); }); return d; }
+  function liste(punkte){ var ol = el("ol"); punkte.forEach(function(x){ add(ol, el("li", null, x)); }); return ol; }
+  add(box, el("h2", null, "📲 Kalender aufs Handy oder in Outlook holen"),
+    add(el("div", "reihe"), exp, abo, kopie),
+    schritt("1. Vereinskalender live in Outlook (für den Ausschuss, empfohlen)", [
+      "So sieht man Änderungen sofort, auf dem PC und in der Outlook-App auf dem Handy.",
+      liste(["Bei der Verwaltung melden: Der Vereinskalender wird dir in Outlook freigegeben.", "Die Freigabe-Einladung kommt per Mail an dein Vereinskonto – in Outlook annehmen.",
+        "Danach steht „Vereinskalender_Spfr1928“ in Outlook in deiner Kalenderliste und hier im Portal."])]),
+    schritt("2. Einmalig als .ics-Datei (Stand von heute)", [
+      "Knopf „Vereinstermine … als .ics“ oben drücken. Die Datei enthält alle Vereinstermine der nächsten 12 Monate.",
+      liste(["iPhone/iPad: Die heruntergeladene Datei öffnen und die Termine zum Kalender hinzufügen.", "Android: Die Datei mit der Kalender-App öffnen.",
+        "Outlook am PC: Die Datei doppelklicken oder per Drag-and-drop in den Kalender ziehen."]),
+      "Wichtig: Das ist eine Kopie. Spätere Änderungen kommen nicht automatisch nach – dann neu herunterladen. Einzelne Termine im Ort gibt es über „📅 .ics“ in der jeweiligen Zeile."]),
+    schritt("3. Gemeinde-Termine abonnieren (aktualisiert sich selbst)", [
+      "Die Gemeinde stellt ihren Schneeberg-Kalender als Abo bereit. Der Kalender aktualisiert sich dann von selbst.",
+      liste(["iPhone/iPad: „🏛 Gemeinde-Kalender abonnieren“ antippen und das Abonnement bestätigen.",
+        "Outlook im Web: Abo-Link kopieren, dann im Kalender „Kalender hinzufügen“ › „Aus dem Internet abonnieren“ und den Link einfügen.",
+        "Google-Kalender: Abo-Link kopieren, dann „Weitere Kalender“ › „Per URL“ und den Link einfügen."]),
+      "Hinweis: Die genauen Menübezeichnungen können je nach Version und Sprache abweichen."]));
+  add(s, box); }
 function kalBearbeiten(ev, isoVorschlag){
+  /* ev.vorlage = neuer Termin mit vorausgefüllten Feldern (z. B. aus „Termine im Ort“) */
+  var neu = !ev || !!ev.vorlage;
   var d = el("dialog"), f = el("form", "karte"); f.noValidate = true;
   var a = ev && kalDatum(ev.start.dateTime), e = ev && kalDatum(ev.end.dateTime);
   function feld(t, typ, v, cls){ var i = el("input"); i.type = typ; i.value = v || ""; var l = el("label", "fld" + (cls ? " " + cls : ""), t); add(l, i); l._i = i; return l; }
@@ -1075,11 +1141,11 @@ function kalBearbeiten(ev, isoVorschlag){
   function sicht(){ fVon.hidden = fBis.hidden = fGanz.checked; fBisD.hidden = !fGanz.checked; }
   fGanz.addEventListener("change", sicht); sicht();
   var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
-  var loe = ev ? btn("gefahr", "Löschen", function(){
+  var loe = !neu ? btn("gefahr", "Löschen", function(){
     if(!confirm("Termin „" + (ev.subject || "") + "“ wirklich löschen? Er verschwindet für alle aus dem Vereinskalender.")) return;
     loe.disabled = true; KALQ().loeschen(ev.id).then(function(){ d.close(); d.remove(); zeigeToast("Termin gelöscht"); route(); })
       .catch(function(x){ loe.disabled = false; add(f, el("div", "fehler", kalFehler(x))); }); }) : null;
-  add(f, el("h2", null, ev ? "Termin ändern" : "Neuer Termin"), add(el("div", "formular"), fT, fD, lGanz, fVon, fBis, fBisD, fO, lN),
+  add(f, el("h2", null, !neu ? "Termin ändern" : (ev ? "In den Vereinskalender übernehmen" : "Neuer Termin")), add(el("div", "formular"), fT, fD, lGanz, fVon, fBis, fBisD, fO, lN),
     add(el("div", "reihe"), ok, btn("", "Abbrechen", function(){ d.close(); d.remove(); }), el("span", "sp"), loe));
   add(d, f); document.body.appendChild(d); d.showModal(); fT._i.focus();
   f.addEventListener("submit", function(x){ x.preventDefault();
@@ -1089,9 +1155,9 @@ function kalBearbeiten(ev, isoVorschlag){
       daten.start = {dateTime: tag + "T00:00:00", timeZone: KAL.zone}; daten.end = {dateTime: isoPlus(bisTag, 1) + "T00:00:00", timeZone: KAL.zone}; }
     else { var v = fVon._i.value || "19:30", b = fBis._i.value || v; if(b <= v){ zeigeToast("Das Ende muss nach dem Beginn liegen."); return; }
       daten.start = {dateTime: tag + "T" + v + ":00", timeZone: KAL.zone}; daten.end = {dateTime: tag + "T" + b + ":00", timeZone: KAL.zone}; }
-    if(ev && fN.value.trim() === (ev.bodyPreview || "").trim()) delete daten.body; /* Vorschau ist gekürzt: unverändert nie zurückschreiben */
+    if(!neu && fN.value.trim() === (ev.bodyPreview || "").trim()) delete daten.body; /* Vorschau ist gekürzt: unverändert nie zurückschreiben */
     ok.disabled = true;
-    KALQ().speichern(ev ? ev.id : null, daten).then(function(){ d.close(); d.remove(); zeigeToast(titel + " gespeichert ✓"); KAL_MONAT = tag.slice(0, 7); var ziel = "#/kalender/" + KAL_MONAT; if(location.hash !== ziel) location.hash = ziel; else route(); })
+    KALQ().speichern(!neu ? ev.id : null, daten).then(function(){ d.close(); d.remove(); zeigeToast(titel + " gespeichert ✓"); KAL_MONAT = tag.slice(0, 7); var ziel = "#/kalender/" + KAL_MONAT; if(location.hash !== ziel) location.hash = ziel; else route(); })
       .catch(function(y){ ok.disabled = false; add(f, el("div", "fehler", kalFehler(y))); });
   });
 }
