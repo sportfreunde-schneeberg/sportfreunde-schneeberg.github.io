@@ -1095,6 +1095,7 @@ function AUQ(){ return TEST ? AuTest : AuLive; }
 function auLink(t){ return "https://tasks.office.com/" + CFG.tenantId + "/Home/Task/" + t.id + "?Type=TaskLink"; }
 function auPlanLink(p){ return "https://tasks.office.com/" + CFG.tenantId + "/Home/PlanViews/" + p.id + "?Type=PlanLink"; }
 function auStatus(t){ return t.percentComplete >= 100 ? "erledigt" : (t.percentComplete > 0 ? "in Arbeit" : "offen"); }
+function auAmpel(st, titel){ var a = el("span", "ampel klein"); a.title = titel || ""; ["rot", "gelb", "gruen"].forEach(function(f, i){ add(a, el("i", f + (i === st ? " an" : ""))); }); return a; }
 function auDatum(dt){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt || ""); return m ? m[3] + "." + m[2] + "." + m[1] : ""; }
 function seiteAufgaben(s){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Aufgaben"]]);
@@ -1119,7 +1120,11 @@ function seiteAufgaben(s){
     var box = el("div"); add(s, box);
     var buckets = D.buckets.slice().sort(function(a, b){ return (a.orderHint || "") < (b.orderHint || "") ? -1 : 1; }), namen = {};
     buckets.forEach(function(b){ namen[b.id] = b.name; });
+    /* Matrix-Darstellung wie Schlüssel/Inventar: eine Tabelle, Buckets als grüne Gruppenzeilen, Stand als Ampel
+       (rot offen, gelb in Arbeit, grün erledigt). Antippen öffnet die Aufgabe in Planner. */
     function zeigen(){ box.textContent = ""; AU_FILTER = filter.value; var n = 0;
+      var t = el("table", "matrix aufg2"), tb = el("tbody");
+      add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", "breit", "Zuständig"), el("th", "m dat", "Fällig"), el("th", "m amp", "Stand"), el("th", "pf"))), tb);
       var gruppen = buckets.map(function(b){ return b.id; }).concat(["?"]);
       gruppen.forEach(function(bid){
         var liste = D.aufgaben.filter(function(t){ var b = namen[t.bucketId] ? t.bucketId : "?"; if(b !== bid) return false; var st = auStatus(t);
@@ -1127,18 +1132,18 @@ function seiteAufgaben(s){
           if(AU_FILTER === "ueber") return st !== "erledigt" && t.dueDateTime && t.dueDateTime.slice(0, 10) < heute; return true; });
         if(!liste.length) return;
         liste.sort(function(a, b){ return (a.dueDateTime || "9999") < (b.dueDateTime || "9999") ? -1 : 1; });
-        var k = el("div", "karte"); add(k, el("h2", null, namen[bid] || "Ohne Bucket"));
-        var t = el("table", "tabelle aufg"), tb = el("tbody");
-        add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Zuständig"), el("th", null, "Fällig"), el("th", null, "Stand"))), tb);
+        add(tb, add(el("tr", "gr"), el("td", null, (namen[bid] || "Ohne Bucket") + " · " + liste.length))); tb.lastChild.firstChild.colSpan = 5;
         liste.forEach(function(a){ n++;
           var st = auStatus(a), ueber = st !== "erledigt" && a.dueDateTime && a.dueDateTime.slice(0, 10) < heute;
           var wer = Object.keys(a.assignments || {}).map(function(id){ return D.leute[id] || ""; }).filter(Boolean).join(", ");
-          var titel = el("a", null, a.title); titel.href = auLink(a); titel.target = "_blank"; titel.rel = "noopener";
-          var tr = el("tr"); add(tr, add(el("td"), a.priority <= 1 ? el("span", "chip offen", "dringend") : null, a.priority <= 1 ? " " : null, titel), el("td", null, wer || "–"),
-            el("td", ueber ? "faellig" : null, auDatum(a.dueDateTime) || "–"), add(el("td"), el("span", "chip " + (st === "erledigt" ? "ok" : (st === "in Arbeit" ? "" : "offen")), st)));
-          add(tb, tr); });
-        add(k, add(el("div", "scroll"), t)); add(box, k); });
-      if(!n) add(box, el("p", "lead", "Keine Aufgaben in dieser Ansicht.")); }
+          var nm = el("th"); add(nm, add(el("b"), a.priority <= 1 ? el("span", "dring", "!") : null, a.title)); add(nm, el("small", "nurhandy", wer || "niemand zugewiesen"));
+          var tr = el("tr", st === "erledigt" ? "aus" : null);
+          add(tr, nm, el("td", "breit", wer || "–"), el("td", "m dat" + (ueber ? " faellig" : ""), auDatum(a.dueDateTime) || "–"),
+            add(el("td", "m amp"), auAmpel(st === "erledigt" ? 2 : (st === "in Arbeit" ? 1 : 0), st)), el("td", "pf", "›"));
+          matrixKlick(tr, function(){ window.open(auLink(a), "_blank", "noopener"); }); tr.title = "In Planner öffnen";
+          add(tb, tr); }); });
+      if(!n){ add(box, el("p", "lead", "Keine Aufgaben in dieser Ansicht.")); return; }
+      add(box, add(el("div", "scroll"), t)); }
     filter.addEventListener("change", zeigen); zeigen();
   }).catch(function(e){ fehlerZeigen(e && (e.status === 403 || e.status === 404) ? "Kein Zugriff auf die Aufgaben. Du musst Mitglied im Team „TEAM Liegenschaften“ sein – bitte bei der Verwaltung melden." : fehlerText(e)); });
 }
@@ -1174,19 +1179,31 @@ function erinnerungenKarte(s){
     add(k, add(el("div", "reihe"), add(el("label", "fld", "Anzeigen"), filter)));
     var box = el("div"); add(k, box);
     function passt(a){ if(ER_FILTER === "dringend") return a.prioritaet === "hoch"; if(ER_FILTER === "faellig") return !!a.faellig; if(ER_FILTER === "zugewiesen") return (a.zustaendig || []).length > 0; return true; }
-    function zeile(a, tiefe, tb){ var ueber = a.faellig && a.faellig.slice(0, 10) < heute;
-      var td = el("td", tiefe ? "unter" : null); if(tiefe) td.style.paddingLeft = (8 + tiefe * 22) + "px";
-      add(td, a.prioritaet === "hoch" ? el("span", "chip offen", "dringend") : null, a.prioritaet === "hoch" ? " " : null, tiefe ? document.createTextNode(a.titel) : el("b", null, a.titel),
-        (a.unteraufgaben || []).length ? el("span", "grau", " · " + a.unteraufgaben.length + " Unteraufgaben") : null, a.anhaenge ? el("span", "grau", " · 📎 " + a.anhaenge) : null,
-        a.notiz ? el("div", "notiz", a.notiz) : null);
-      add(tb, add(el("tr", tiefe ? "unter" : "oben"), td, el("td", null, (a.zustaendig || []).join(", ") || "–"), el("td", ueber ? "faellig" : null, erFaellig(a.faellig) || "–"))); }
+    /* Matrix-Darstellung: Hauptaufgaben fett, Unteraufgaben eingerückt und zugeklappt (antippen klappt auf). */
+    var auf = {}, alleAuf = false;
+    var knopf = btn("klein", "Alle aufklappen", function(){ alleAuf = !alleAuf; knopf.textContent = alleAuf ? "Alle zuklappen" : "Alle aufklappen"; auf = {}; zeigen(); });
+    filter.parentNode.parentNode.appendChild(knopf);
+    function zeile(a, tiefe, tb, offen, schluessel){ var ueber = a.faellig && a.faellig.slice(0, 10) < heute, unter = (a.unteraufgaben || []).length;
+      var nm = el("th", tiefe ? "unter" : null); if(tiefe) nm.style.paddingLeft = (8 + tiefe * 20) + "px";
+      var titel = el(tiefe ? "span" : "b"); add(titel, a.prioritaet === "hoch" ? el("span", "dring", "!") : null, tiefe ? "↳ " : null, a.titel);
+      add(nm, titel);
+      var info = [unter ? (offen ? "▾ " : "▸ ") + unter + " Unteraufgabe" + (unter === 1 ? "" : "n") : "", a.anhaenge ? "📎 " + a.anhaenge : ""].filter(Boolean);
+      if(info.length) add(nm, el("small", null, info.join(" · ")));
+      if((a.zustaendig || []).length) add(nm, el("small", "nurhandy", "👤 " + a.zustaendig.join(", ")));
+      if(a.notiz) add(nm, el("small", "notiz", a.notiz));
+      var tr = el("tr", tiefe ? "unter" : "oben");
+      add(tr, nm, el("td", "breit", (a.zustaendig || []).join(", ") || "–"), el("td", "m dat" + (ueber ? " faellig" : ""), erFaellig(a.faellig) || "–"));
+      if(unter && !tiefe){ tr.classList.add("klickbar"); tr.tabIndex = 0; tr.title = offen ? "Zuklappen" : "Unteraufgaben zeigen";
+        var um = function(){ auf[schluessel] = !offen; zeigen(); }; tr.addEventListener("click", um); tr.addEventListener("keydown", function(e){ if(e.key === "Enter") um(); }); }
+      add(tb, tr); }
     function zeigen(){ box.textContent = ""; ER_FILTER = filter.value;
-      var t = el("table", "tabelle aufg er"), tb = el("tbody"), n = 0;
-      add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Zuständig"), el("th", null, "Fällig"))), tb);
-      (function lauf(liste, tiefe){ liste.forEach(function(a){
+      var t = el("table", "matrix er2"), tb = el("tbody"), n = 0;
+      add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", "breit", "Zuständig"), el("th", "m dat", "Fällig"))), tb);
+      (function lauf(liste, tiefe, sichtbar){ liste.forEach(function(a, i){
         var unter = a.unteraufgaben || [], trifft = ER_FILTER === "alle" ? true : (passt(a) || unter.some(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }));
-        if(!trifft) return; zeile(a, tiefe, tb); n++;
-        lauf(ER_FILTER === "alle" || passt(a) ? unter : unter.filter(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }), tiefe + 1); }); })(alle, 0);
+        if(!trifft) return; var sl = tiefe + ":" + (a.id || a.titel), offen = ER_FILTER !== "alle" || alleAuf || !!auf[sl] || tiefe > 0;
+        if(sichtbar) zeile(a, tiefe, tb, offen, sl); n++;
+        lauf(ER_FILTER === "alle" || passt(a) ? unter : unter.filter(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }), tiefe + 1, sichtbar && offen); }); })(alle, 0, true);
       if(!n){ add(box, el("p", "lead", "Keine Erinnerungen in dieser Ansicht.")); return; }
       add(box, add(el("div", "scroll"), t)); }
     filter.addEventListener("change", zeigen); zeigen();

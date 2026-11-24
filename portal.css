@@ -338,3 +338,14 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 .tbleg i{display:inline-block;width:12px;height:12px;border-radius:50%}
 .tbleg i.rot{background:#e0453a}.tbleg i.gelb{background:#f2b51d}.tbleg i.gruen{background:#34a853}
 @media (max-width:640px){.matrix.tb .m.amp{width:84px}.ampel{gap:4px;padding:4px 5px}.ampel i,.ampel button{width:20px;height:20px}}
+/* Aufgaben (Erinnerungen und Planner) im Matrix-Format */
+.matrix .m.dat{width:110px;white-space:nowrap}
+.matrix td.faellig{color:var(--err);font-weight:700}
+.matrix .dring{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--err);color:#fff;font-size:12px;font-weight:800;margin-right:6px;vertical-align:1px}
+.matrix.er2 tr.oben th{border-top:1px solid var(--line)}
+.matrix.er2 tr.unter th,.matrix.er2 tr.unter td{background:var(--sunken);font-size:14px}
+.matrix.er2 tr.unter th span{font-weight:400}
+.matrix small.notiz{font-style:italic}
+.ampel.klein{padding:3px 5px;gap:3px}.ampel.klein i{width:12px;height:12px}
+@media (max-width:640px){.matrix .m.dat{width:84px;font-size:13px}}
+@media print{.matrix tr.gr td{background:#ddd!important;color:#000!important}.matrix .pf{display:none}}
