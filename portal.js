@@ -274,7 +274,7 @@ function seiteStart(s){
   pfad([["Start"]]);
   add(s, el("h1", null, "Hallo" + (konto && konto.name ? " " + konto.name.split(" ")[0] : "") + "!"), el("p", "lead", "Wähle einen Bereich."));
   var k = el("div", "kacheln");
-  add(k, kachel("🏠", "Verwaltung", "Kabinenreinigung, Ausleihliste, Schlüssel und Inventar", "#/verwaltung", true),
+  add(k, kachel("🏠", "Liegenschaften", "Kabinenreinigung, Ausleihliste, Schlüssel und Inventar", "#/verwaltung", true),
     kachel("🎉", "Festausschuss", "Festplaner 100 Jahre Sportfreunde (2.–5. Juni 2028)", "/festplaner/", true),
     kachel("👕", "Teamwear-Status", "Bestellungen und ihr Stand: bestellt, ausgehändigt, bezahlt", "#/teamwear", true),
     kachel("📄", "Protokolle", "Ausschusssitzungen, Klausurtagungen und Generalversammlung nach Jahr und Monat", "#/protokolle", true),
@@ -282,8 +282,8 @@ function seiteStart(s){
   add(s, k);
 }
 function seiteVerwaltung(s){
-  pfad([["Start", "#/"], ["Verwaltung"]]);
-  add(s, el("h1", null, "Verwaltung"), el("p", "lead", "Die Daten stehen in der Liegenschaften-Excel im Team „TEAM - Liegenschaften“. Änderungen hier landen direkt dort."));
+  pfad([["Start", "#/"], ["Liegenschaften"]]);
+  add(s, el("h1", null, "Liegenschaften"), el("p", "lead", "Die Daten stehen in der Liegenschaften-Excel im Team „TEAM - Liegenschaften“. Änderungen hier landen direkt dort."));
   var k = el("div", "kacheln");
   add(k, kachel("🧽", "Kabinenreinigung", "Monat eintragen, Stunden und Beträge", "#/verwaltung/reinigung"),
     kachel("📦", "Ausleihliste", "Buchungen anlegen, Preise, Rabatt und Zahlung", "#/verwaltung/ausleihe"),
@@ -303,7 +303,7 @@ function seiteVerwaltung(s){
 
 /* --- Kabinenreinigung --- */
 function seiteReinigung(s){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Kabinenreinigung"]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Kabinenreinigung"]]);
   ladeHinweis(s);
   laden().then(function(D){
     s.textContent = "";
@@ -381,7 +381,7 @@ function seiteReinigung(s){
 /* --- Ausleihliste --- */
 var AUSWAHL_JAHR = null;
 function seiteAusleihe(s, unter){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Ausleihliste"]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste"]]);
   ladeHinweis(s);
   laden().then(function(D){
     s.textContent = "";
@@ -423,7 +423,7 @@ function seiteAusleihe(s, unter){
   }).catch(function(e){ fehlerZeigen(fehlerText(e)); });
 }
 function formularNeueBuchung(s, D, jahre){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Neue Buchung"]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Neue Buchung"]]);
   var inv = inventar(D.blaetter[BLATT.inventar] || []).filter(function(i){ return !/nicht/i.test(i.wer); });
   add(s, el("h1", null, "Neue Buchung"), el("p", "lead", "Der Listenpreis kommt automatisch aus dem Inventar. Weicht der Preis ab, ist die Differenz der Rabatt."));
   var f = el("form", "karte"); f.noValidate = true;
@@ -481,7 +481,7 @@ function formularNeueBuchung(s, D, jahre){
   });
 }
 function formularBuchung(s, b, jahr){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Nr. " + b.nr]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Nr. " + b.nr]]);
   add(s, el("h1", null, "Buchung Nr. " + b.nr), el("p", "lead", b.wer + " · " + datumText(b.datum)));
   var f = el("form", "karte"); f.noValidate = true;
   var felder = b.pos.map(function(p){ var i = el("input"); i.inputMode = "decimal"; i.value = p.preis != null ? zahlText(p.preis) : ""; return i; });
@@ -533,7 +533,7 @@ function formularBuchung(s, b, jahr){
 
 /* --- Schlüssel --- */
 function seiteSchluessel(s){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Schlüssel"]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Schlüssel"]]);
   ladeHinweis(s);
   laden().then(function(D){
     s.textContent = "";
@@ -608,7 +608,7 @@ function schluesselBearbeiten(p, leute){
 
 /* --- Inventar --- */
 function seiteInventar(s){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Inventar"]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Inventar"]]);
   ladeHinweis(s);
   laden().then(function(D){
     s.textContent = "";
@@ -1006,7 +1006,7 @@ function auPlanLink(p){ return "https://tasks.office.com/" + CFG.tenantId + "/Ho
 function auStatus(t){ return t.percentComplete >= 100 ? "erledigt" : (t.percentComplete > 0 ? "in Arbeit" : "offen"); }
 function auDatum(dt){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt || ""); return m ? m[3] + "." + m[2] + "." + m[1] : ""; }
 function seiteAufgaben(s){
-  pfad([["Start", "#/"], ["Verwaltung", "#/verwaltung"], ["Aufgaben"]]);
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Aufgaben"]]);
   ladeHinweis(s);
   AUQ().laden().then(function(D){
     s.textContent = "";
