@@ -113,7 +113,7 @@ function finden(){
       (l.value || []).forEach(function(it){ var m = CFG.muster.exec(it.name); if(m){ var r = +m[1] * 1000 + +m[2]; if(r > rang){ rang = r; beste = it; } } });
       if(!beste){ var e = new Error("Datei"); e.status = 404; e.detail = "Im Ordner „" + CFG.ordner + "“ wurde keine Datei „Spfr_Liegenschaften_Verwaltung_vX.Y.xlsx“ gefunden"; throw e; }
       DATEINAME = beste.name;
-      return ids = {wb: "/drives/" + d.id + "/items/" + beste.id + "/workbook"}; }); });
+      return ids = {drive: d.id, wb: "/drives/" + d.id + "/items/" + beste.id + "/workbook"}; }); });
 }
 var DATEINAME = "";
 /* Schreibrechte je Bereich. Alle anderen Angemeldeten dürfen nur lesen.
@@ -289,7 +289,7 @@ function seiteVerwaltung(s){
     kachel("📦", "Ausleihliste", "Buchungen anlegen, Preise, Rabatt und Zahlung", "#/verwaltung/ausleihe"),
     kachel("🔑", "Schlüssel", "Wer hat welchen Schlüssel, Schlösser", "#/verwaltung/schluessel"),
     kachel("🗂️", "Inventar", "Gegenstände, Lagerorte und Leihgebühren", "#/verwaltung/inventar"),
-    kachel("✅", "Aufgaben", "Offene Aufgaben aus Planner für die monatliche Ausschusssitzung", "#/verwaltung/aufgaben"));
+    kachel("✅", "Aufgaben", "Offene Aufgaben aus Planner und der iCloud-Liste für die monatliche Ausschusssitzung", "#/verwaltung/aufgaben"));
   add(s, k);
   laden().then(function(D){
     if(DATEINAME) add(s, el("p", "lead", "Gelesen wird: " + DATEINAME + (SCHREIBEN_FREI ? "" : " · Eintragen ist im Portal noch gesperrt.")));
@@ -1012,7 +1012,7 @@ function seiteAufgaben(s){
     s.textContent = "";
     add(s, el("h1", null, "Aufgaben Liegenschaften"));
     if(!D.plan){ add(s, el("p", "lead", "Es gibt noch keinen Planner-Plan im Team „TEAM Liegenschaften“."),
-      el("div", "hinweis", "Anlegen in Teams: Team „TEAM Liegenschaften“ › Kanal „General“ › „+“ › Planner › neuer Plan „Liegenschaften – Aufgaben“. Danach erscheinen die Aufgaben hier automatisch.")); return; }
+      el("div", "hinweis", "Anlegen in Teams: Team „TEAM Liegenschaften“ › Kanal „General“ › „+“ › Planner › neuer Plan „Liegenschaften – Aufgaben“. Danach erscheinen die Aufgaben hier automatisch.")); erinnerungenKarte(s); return; }
     var heute = new Date().toISOString().slice(0, 10);
     var lead = el("p", "lead", "Stand aus Planner („" + D.plan.title + "“) für die monatliche Ausschusssitzung. Bearbeitet wird in Planner. ");
     var pl = el("a", null, "Plan in Planner öffnen"); pl.href = auPlanLink(D.plan); pl.target = "_blank"; pl.rel = "noopener"; add(lead, pl); add(s, lead);
@@ -1047,7 +1047,34 @@ function seiteAufgaben(s){
         add(k, add(el("div", "scroll"), t)); add(box, k); });
       if(!n) add(box, el("p", "lead", "Keine Aufgaben in dieser Ansicht.")); }
     filter.addEventListener("change", zeigen); zeigen();
+    erinnerungenKarte(s);
   }).catch(function(e){ fehlerZeigen(e && (e.status === 403 || e.status === 404) ? "Kein Zugriff auf die Aufgaben. Du musst Mitglied im Team „TEAM Liegenschaften“ sein – bitte bei der Verwaltung melden." : fehlerText(e)); });
+}
+
+/* ---------- Erinnerungen (iCloud-Liste, vom Mac abgeglichen) ----------
+ * Der Mac schreibt alle 30 Minuten die offenen Erinnerungen als JSON in den Teams-Ordner (Tools/erinnerungen_sync.sh).
+ * Das Portal liest die Datei nur. Bearbeitet wird in der Erinnerungen-App. */
+var ER_PFAD = "General/Aufgabenliste/Erinnerungen_offen.json";
+function erinnerungenLaden(){
+  if(TEST){ var j = new Date().getFullYear(); return Promise.resolve({liste: "Beispielliste", stand: j + "-11-24T09:30+01:00", aufgaben: [
+    {titel: "Beispiel: Mülltonne raus", faellig: j + "-12-14", prioritaet: "hoch", notiz: ""}, {titel: "Beispiel: Torbefestigungen", faellig: null, prioritaet: "", notiz: "Netzhaken fehlen"}]}); }
+  return finden().then(function(i){ return gf("/drives/" + i.drive + "/root:/" + pfadK(ER_PFAD) + "?$select=id,@microsoft.graph.downloadUrl"); })
+    .then(function(it){ return fetch(it["@microsoft.graph.downloadUrl"]); })
+    .then(function(r){ if(!r.ok){ var e = new Error("Datei " + r.status); e.status = r.status; throw e; } return r.json(); });
+}
+function erinnerungenKarte(s){
+  var k = el("div", "karte"); add(k, el("h2", null, "Aus der iCloud-Erinnerungsliste"), el("p", "lead", "Wird geladen …")); add(s, k);
+  erinnerungenLaden().then(function(D){
+    k.textContent = ""; add(k, el("h2", null, "Aus der iCloud-Erinnerungsliste"));
+    var st = D.stand ? new Date(D.stand) : null;
+    add(k, el("p", "lead", (D.aufgaben || []).length + " offen · zuletzt geändert " + (st && !isNaN(st) ? st.toLocaleString("de-DE", {dateStyle: "medium", timeStyle: "short"}) : "–") + ". Bearbeitet wird in der Erinnerungen-App; der Abgleich läuft alle 30 Minuten, solange der Mac der Verwaltung an ist."));
+    var heute = heuteISO(), t = el("table", "tabelle aufg"), tb = el("tbody");
+    add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Notiz"), el("th", null, "Fällig"))), tb);
+    (D.aufgaben || []).forEach(function(a){ var ueber = a.faellig && a.faellig < heute;
+      add(tb, add(el("tr"), add(el("td"), a.prioritaet === "hoch" ? el("span", "chip offen", "dringend") : null, a.prioritaet === "hoch" ? " " : null, a.titel), el("td", null, a.notiz || "–"), el("td", ueber ? "faellig" : null, a.faellig ? isoZuText(a.faellig) : "–"))); });
+    add(k, add(el("div", "scroll"), t));
+  }).catch(function(e){ k.textContent = ""; add(k, el("h2", null, "Aus der iCloud-Erinnerungsliste"),
+    el("p", "lead", e && e.status === 404 ? "Noch kein Abgleich vorhanden (Datei „Aufgabenliste/Erinnerungen_offen.json“ fehlt)." : "Die Erinnerungen konnten nicht geladen werden: " + fehlerText(e))); });
 }
 
 /* ---------- Ablauf ---------- */
