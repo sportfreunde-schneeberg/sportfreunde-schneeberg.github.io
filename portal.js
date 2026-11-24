@@ -1358,11 +1358,77 @@ var MANNSCHAFTEN = {
     {name: "Mädchen", link: "https://1928schneeberg.de/maedchenmannschaft/", teams: [
       {name: "Mädchenmannschaft", info: "12 bis 18 Jahre", training: ["Mittwoch 19:00–20:15 Uhr (Sportplatz Schneeberg)"]}]}]}
 };
+/* Daten aus Teams: Team „TEAM Jugend“ (Gruppe TEAMJugend), Ordner General.
+ *  - „Mannschaften.xlsx“, Blatt „Mannschaften“ (Kopf Zeile 4): A Bereich · B Gruppe · C Mannschaft · D Klasse/Alter · E Trainer
+ *    F Betreuer · G Ansprechpartner · H Telefon · I E-Mail · J Homepage · K Bemerkung
+ *  - „Übersicht Training_Spiel.xlsx“: Wochenplan je Saison (Blattname z. B. „2026_27“); angezeigt wird die neueste Saison.
+ * Ohne Zugriff auf das Team zeigt das Portal die Angaben von der Homepage (MANNSCHAFTEN, ohne Namen). */
+var MS = { gruppe: "TEAMJugend", liste: "General/Mannschaften.xlsx", plan: "General/Übersicht Training_Spiel.xlsx" };
+var msCache = null;
+function msArt(name){ name = txt(name); if(/^u\s?\d|bambini|jugend|mädchen|maedchen/i.test(name)) return "jugend"; if(/mannschaft|damen|herren|^ah\b|alte herren/i.test(name)) return "aktive"; return ""; }
+var MsLive = {
+  laden: function(){ if(msCache) return Promise.resolve(msCache);
+    return gf("/groups?$filter=" + encodeURIComponent("mailNickname eq '" + MS.gruppe + "'") + "&$select=id").then(function(r){
+      var g = r && r.value && r.value[0]; if(!g){ var e = new Error("Gruppe"); e.status = 404; throw e; }
+      var dr = "/groups/" + g.id + "/drive";
+      var liste = gf(dr + "/root:/" + pfadK(MS.liste) + "?$select=id,webUrl").then(function(it){
+        return gf(dr + "/items/" + it.id + "/workbook/worksheets('Mannschaften')/usedRange(valuesOnly=true)?$select=address,values").then(function(b){ return {web: it.webUrl, werte: ausrichten(b.address, b.values || [])}; }); });
+      var plan = gf(dr + "/root:/" + pfadK(MS.plan) + "?$select=id,webUrl").then(function(it){ var wb = dr + "/items/" + it.id + "/workbook";
+        return gf(wb + "/worksheets?$select=name").then(function(l){
+          var saisons = l.value.map(function(x){ return x.name; }).filter(function(n){ return /^\d{4}_\d{2}$/.test(n); }).sort(), n = saisons[saisons.length - 1] || l.value[0].name;
+          return gf(wb + blattPfad(n) + "/usedRange(valuesOnly=true)?$select=values").then(function(b){ return {web: it.webUrl, blatt: n, werte: b.values || []}; }); }); }).catch(function(){ return null; });
+      return Promise.all([liste, plan]).then(function(x){ return msCache = {liste: x[0], plan: x[1]}; }); }); }
+};
+var MsTest = { laden: function(){ return Promise.resolve({
+  liste: {web: "#", werte: [[], [], [], ["Bereich"], ["Aktive", "Herren", "1. Mannschaft", "A-Klasse", "Trainer A (Beispiel)", "", "Trainer A", "0170/000000", "", "https://1928schneeberg.de/1-2-mannschaft/", ""],
+    ["Jugend", "Großfeld", "C-Jugend", "U15", "Trainer B, Trainer C", "Betreuerin D", "Jugendleiter E", "0170/111111", "e@example.org", "https://1928schneeberg.de/jugend-grossfeld/", "Beispieldaten"],
+    ["Jugend", "Kleinfeld", "Bambini", "", "Trainer F", "", "", "", "", "", ""]]},
+  plan: {web: "#", blatt: "2026_27", werte: [["Übersicht Training & Spiel - Saison 2026/27"], ["", "", "Montag", "Dienstag", "Mittwoch"], ["Bambini", "Training", "", "", "17.00 - 18.30"], ["", "Spiel", "Turniere"], ["U 15 - C", "Training", "A 18.30", "", "S 18.30"], ["1. Mannschaft", "Training", "", "x", ""], ["Schneeberg", "Juli/August", "November"]]}}); } };
+function MSQ(){ return TEST ? MsTest : MsLive; }
 function seiteMannschaften(s, art){
   var M = MANNSCHAFTEN[art];
   pfad([["Start", "#/"], [M.titel]]);
-  s.textContent = "";
-  add(s, el("h1", null, M.sym + " " + M.titel), el("p", "lead", M.lead + " Stand laut Homepage (gelesen am 24.11.2026). Trainer, Betreuer und Kontakte stehen auf der Homepage."));
+  ladeHinweis(s); seite().firstChild.textContent = "Mannschaften werden aus Teams geladen …";
+  MSQ().laden().then(function(D){
+    s.textContent = "";
+    add(s, el("h1", null, M.sym + " " + M.titel));
+    var lead = el("p", "lead", "Aus dem Team „TEAM Jugend“: Liste „Mannschaften“ (Trainer, Betreuer, Ansprechpartner) und „Übersicht Training_Spiel“ (Trainingszeiten). Geändert wird dort. ");
+    var l1 = el("a", null, "Liste öffnen"); l1.href = D.liste.web; l1.target = "_blank"; l1.rel = "noopener"; add(lead, l1);
+    if(D.plan){ var l2 = el("a", null, "Übersicht öffnen"); l2.href = D.plan.web; l2.target = "_blank"; l2.rel = "noopener"; add(lead, " · ", l2); }
+    add(s, lead);
+    var w = D.liste.werte, gruppen = {}, reihe = [];
+    for(var z = ERSTE; z <= w.length; z++){ var name = txt(zelle(w, z, 2)); if(!name) continue;
+      var bereich = txt(zelle(w, z, 0)).toLowerCase(); if((art === "jugend") !== (bereich === "jugend")) continue;
+      var gr = txt(zelle(w, z, 1)) || "Mannschaften"; if(!gruppen[gr]){ gruppen[gr] = []; reihe.push(gr); }
+      gruppen[gr].push({name: name, klasse: txt(zelle(w, z, 3)), trainer: txt(zelle(w, z, 4)), betreuer: txt(zelle(w, z, 5)), ansprech: txt(zelle(w, z, 6)), tel: txt(zelle(w, z, 7)), mail: txt(zelle(w, z, 8)), link: txt(zelle(w, z, 9)), bem: txt(zelle(w, z, 10))}); }
+    reihe.forEach(function(gr){ var k = el("div", "karte"); add(s, k); add(k, el("h2", null, gr));
+      var t = el("table", "tabelle"), tb = el("tbody");
+      add(t, add(el("thead"), add(el("tr"), el("th", null, "Mannschaft"), el("th", null, "Trainer"), el("th", null, "Betreuer"), el("th", null, "Ansprechpartner"))), tb);
+      gruppen[gr].forEach(function(m){
+        var td1 = add(el("td"), el("b", null, m.name)); if(m.klasse) add(td1, el("div", "grau", m.klasse));
+        if(m.link){ var hl = el("a", "grau", "Homepage"); hl.href = m.link; hl.target = "_blank"; hl.rel = "noopener"; add(td1, el("div"), hl); }
+        var td4 = add(el("td"), m.ansprech || "–");
+        if(m.tel){ var tl = el("a", null, "📞 " + m.tel); tl.href = "tel:" + m.tel.replace(/[^\d+]/g, ""); add(td4, el("br"), tl); }
+        if(m.mail){ var ml = el("a", null, "✉️ " + m.mail); ml.href = "mailto:" + m.mail; add(td4, el("br"), ml); }
+        var tr = add(el("tr"), td1, el("td", null, m.trainer || "–"), el("td", null, m.betreuer || "–"), td4); add(tb, tr);
+        if(m.bem) add(tb, add(el("tr"), add(el("td"), ""), add(el("td"), el("span", "grau", m.bem)), el("td"), el("td"))); });
+      add(k, add(el("div", "scroll"), t)); });
+    if(!reihe.length) add(s, el("p", "lead", "In der Liste „Mannschaften“ steht noch keine Mannschaft mit Bereich „" + (art === "jugend" ? "Jugend" : "Aktive") + "“."));
+    /* Wochenübersicht Training & Spiel: Zeilen der passenden Mannschaften, Kopfzeilen und übrige Zeilen bleiben */
+    var k2 = el("div", "karte"); add(s, k2); add(k2, el("h2", null, "Training und Spiele" + (D.plan ? " · Saison " + D.plan.blatt.replace("_", "/") : "")));
+    if(!D.plan){ add(k2, el("p", "lead", "„Übersicht Training_Spiel.xlsx“ wurde im Team „TEAM Jugend“ nicht gefunden.")); return; }
+    var akt = "", zeilen = [];
+    D.plan.werte.forEach(function(r, i){ var a = txt(r[0]); if(a) akt = msArt(a) || (i < 3 || /montag|dienstag/i.test(r.join(" ")) ? "kopf" : "sonst");
+      else if(!r.some(function(v){ return !leer(v); })) return;
+      if(akt === "kopf" || akt === art) zeilen.push(r); });
+    add(k2, tabelleAus(zeilen));
+  }).catch(function(e){
+    s.textContent = "";
+    add(s, el("h1", null, M.sym + " " + M.titel), el("div", "hinweis", e && (e.status === 403 || e.status === 404) ? "Kein Zugriff auf das Team „TEAM Jugend“ – angezeigt werden die Angaben von der Homepage ohne Namen. Für Trainer und Kontakte bitte bei der Verwaltung melden." : "Die Liste aus Teams konnte nicht geladen werden (" + fehlerText(e) + "). Angezeigt werden die Angaben von der Homepage."));
+    mannschaftenHomepage(s, M); });
+}
+function mannschaftenHomepage(s, M){
+  add(s, el("p", "lead", M.lead + " Stand laut Homepage (gelesen am 24.11.2026)."));
   M.gruppen.forEach(function(g){
     var k = el("div", "karte"); add(s, k);
     var hl = el("a", null, "Seite auf der Homepage"); hl.href = g.link; hl.target = "_blank"; hl.rel = "noopener";
