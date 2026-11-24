@@ -1504,19 +1504,19 @@ function seiteFest(s, key, jahr, ber){
  * Team „Sportfreunde Schneeberg 1928 e.V.“ › Schriftführer/06_Bandenwerbung: Vertragsvorlage „Bandenwerbung.docx“,
  * je Jahr „JJJJ Rechnungen“ mit „Bandenwerbung JJJJ.xlsx“ (Blatt „Rechung“ = Datenquelle) und Serienbrief, Verträge in „neu ab 2024“.
  * Das Portal zeigt den Ablauf, die Dateien und die Werbepartner aus der neuesten Jahres-Excel. Bearbeitet wird in Word/Excel. */
-var BW = "06_Bandenwerbung";
+var BAND = "06_Bandenwerbung";
 var BwLive = {
   laden: function(){ return prFinden().then(function(d){
-    return prKinder(BW).then(function(wurzel){
+    return prKinder(BAND).then(function(wurzel){
       var jahre = wurzel.filter(function(x){ return x.folder && /^\d{4}\b/.test(x.name); }).sort(function(a, b){ return b.name.localeCompare(a.name); });
       var vertraege = wurzel.filter(function(x){ return x.folder && /neu ab/i.test(x.name); })[0];
       var jahr = jahre[0];
-      var dJahr = jahr ? prKinder(BW + "/" + jahr.name) : Promise.resolve([]);
-      var dVertr = vertraege ? prKinder(BW + "/" + vertraege.name).then(function(l){
-        return Promise.all(l.map(function(x){ return x.folder ? prKinder(BW + "/" + vertraege.name + "/" + x.name).then(function(u){ return [x].concat(u.map(function(y){ y.unter = x.name; return y; })); }) : [x]; })).then(function(a){ return [].concat.apply([], a); }); }) : Promise.resolve([]);
+      var dJahr = jahr ? prKinder(BAND + "/" + jahr.name) : Promise.resolve([]);
+      var dVertr = vertraege ? prKinder(BAND + "/" + vertraege.name).then(function(l){
+        return Promise.all(l.map(function(x){ return x.folder ? prKinder(BAND + "/" + vertraege.name + "/" + x.name).then(function(u){ return [x].concat(u.map(function(y){ y.unter = x.name; return y; })); }) : [x]; })).then(function(a){ return [].concat.apply([], a); }); }) : Promise.resolve([]);
       return Promise.all([dJahr, dVertr]).then(function(r){
         var xl = r[0].filter(function(x){ return x.file && /\.xlsx$/i.test(x.name) && /bandenwerbung/i.test(x.name); })[0];
-        var liste = xl ? gf("/drives/" + d + "/root:/" + pfadK(PR.basis + "/" + BW + "/" + jahr.name + "/" + xl.name) + "?$select=id").then(function(it){
+        var liste = xl ? gf("/drives/" + d + "/root:/" + pfadK(PR.basis + "/" + BAND + "/" + jahr.name + "/" + xl.name) + "?$select=id").then(function(it){
           var wb = "/drives/" + d + "/items/" + it.id + "/workbook";
           return gf(wb + "/worksheets?$select=name").then(function(ws){ var n = (ws.value.filter(function(w){ return /rech/i.test(w.name); })[0] || ws.value[0]).name;
             return gf(wb + blattPfad(n) + "/usedRange(valuesOnly=true)?$select=values").then(function(b){ return {blatt: n, werte: b.values || []}; }); }); }).catch(function(){ return null; }) : Promise.resolve(null);
