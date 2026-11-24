@@ -1450,7 +1450,7 @@ function tombolaEditor(d, b){
   var neuBtn = btn("primary", "+ Neuer Eintrag", function(){ var z = zeilen.filter(function(x){ return !belegt(x); })[0];
     if(!z){ zeigeToast("Keine freie Zeile mehr – bitte in Excel Zeilen einfügen."); return; } dialog(z); });
   var leg = el("div", "tbleg"); STUFE.forEach(function(x){ add(leg, add(el("span"), el("i", x[0] + " an"), x[1])); });
-  add(box, add(el("p", "lead"), "Ampel antippen, um den Stand zu setzen. Eintrag antippen für alle Angaben. Gespeichert wird in der Excel in Teams. ", ex), gesamt, sum, leg, add(el("div", "reihe"), neuBtn), liste);
+  add(box, add(el("p", "lead"), "Stand per Knopf setzen (✕ noch nicht angesprochen · … in Besorgung · ✓ erledigt). Eintrag antippen für alle Angaben. Gespeichert wird in der Excel in Teams. ", ex), gesamt, sum, leg, add(el("div", "reihe"), neuBtn), liste);
   function zaehlen(){ var n = [0, 0, 0], wert = 0, alle = 0; zeilen.forEach(function(z){ if(!belegt(z)) return; alle++; n[stufe(z)]++; wert += zahl(z.wert) || 0; });
     sum.textContent = ""; add(sum, add(el("span"), "Einträge ", el("b", null, String(alle))), add(el("span"), "offen ", el("b", null, String(n[0]))), add(el("span"), "in Besorgung ", el("b", null, String(n[1]))), add(el("span"), "erledigt ", el("b", null, String(n[2]))), add(el("span"), "Wert ", el("b", null, euro(wert))));
     var g = !alle ? 0 : (n[2] === alle ? 2 : (n[0] === alle ? 0 : 1));
@@ -1468,7 +1468,7 @@ function tombolaEditor(d, b){
       var info = [txt(z.preis), ja(z.zugesagt) ? "zugesagt" : (/^nein/i.test(txt(z.zugesagt)) ? "abgesagt" : "")].filter(Boolean).join(" · ");
       if(info) add(nm, el("small", "nurhandy", info)); if(ja(z.zugesagt) || /^nein/i.test(txt(z.zugesagt))) add(nm, el("small", "breit", ja(z.zugesagt) ? "zugesagt" : "abgesagt")); if(txt(z.bem)) add(nm, el("small", null, txt(z.bem)));
       var amp = el("td", "m amp"), a = el("span", "ampel");
-      STUFE.forEach(function(x, i){ var kn = el("button", x[0] + (i === st ? " an" : "")); kn.type = "button"; kn.title = x[1]; kn.setAttribute("aria-label", x[1]); kn.setAttribute("aria-pressed", i === st ? "true" : "false");
+      STUFE.forEach(function(x, i){ var kn = el("button", x[0] + (i === st ? " an" : ""), ["✕", "…", "✓"][i]); kn.type = "button"; kn.title = x[1]; kn.setAttribute("aria-label", x[1]); kn.setAttribute("aria-pressed", i === st ? "true" : "false");
         kn.addEventListener("click", function(ev){ ev.stopPropagation(); if(i !== stufe(z)) setzen(z, i, kn); }); add(a, kn); });
       add(amp, a);
       add(tr, el("td", "breit", String(z.nr)), nm, el("td", "breit", txt(z.preis)), el("td", null, txt(z.von) || "–"), amp, el("td", "pf", "›"));

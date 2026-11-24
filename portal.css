@@ -320,24 +320,28 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 .matrix button.chip:disabled{opacity:.5}
 .matrix th small.breit{display:block}
 @media (max-width:640px){.matrix th small.breit{display:none}}
-/* Tombola-Ampeln: rot = noch nicht angesprochen, gelb = in Besorgung, grün = erledigt; nur eine leuchtet */
-.ampel{display:inline-flex;gap:5px;align-items:center;background:#2a2f2b;border-radius:14px;padding:4px 6px}
-.ampel i,.ampel button{display:block;width:18px;height:18px;border-radius:50%;border:none;padding:0;opacity:.22;cursor:pointer}
-.ampel i{cursor:default}
-.ampel .rot{background:#e0453a}.ampel .gelb{background:#f2b51d}.ampel .gruen{background:#34a853}
-.ampel .an{opacity:1;box-shadow:0 0 6px currentColor}
-.ampel .rot.an{color:#e0453a}.ampel .gelb.an{color:#f2b51d}.ampel .gruen.an{color:#34a853}
-.ampel button:disabled{cursor:wait}
-.ampel button:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.matrix.tb .m.amp{width:96px}
+/* Tombola-Stand: drei Knöpfe nebeneinander (rot = noch nicht angesprochen, gelb = in Besorgung, grün = erledigt), der aktive ist gefüllt.
+   Gleiche Optik (klein, nicht klickbar) für die Gesamtanzeige und den Planner-Stand. */
+.ampel{display:inline-flex;gap:6px;align-items:center}
+.ampel .rot{--f:#d93a2f}.ampel .gelb{--f:#e6a800}.ampel .gruen{--f:#2e9a4c}
+.ampel button{display:grid;place-items:center;width:40px;height:38px;border-radius:10px;border:2px solid var(--f);background:var(--surface);color:var(--f);
+  font:inherit;font-size:17px;font-weight:800;padding:0;cursor:pointer;box-shadow:0 2px 0 var(--line);transition:transform .08s,box-shadow .08s,background .15s}
+.ampel button:hover{background:color-mix(in srgb,var(--f) 12%,var(--surface))}
+.ampel button.an{background:var(--f);color:#fff;box-shadow:inset 0 2px 3px rgba(0,0,0,.25)}
+.ampel button:active{transform:translateY(2px) scale(.96);box-shadow:none}
+.ampel button:disabled{cursor:wait;opacity:.6}
+.ampel button:focus-visible{outline:3px solid var(--bandgold);outline-offset:2px}
+.ampel i{display:block;width:22px;height:16px;border-radius:5px;border:2px solid var(--f);background:transparent}
+.ampel i.an{background:var(--f)}
+.matrix.tb .m.amp{width:150px}
 .tbgesamt{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--muted);border-radius:10px;padding:10px 14px;margin:6px 0}
 .tbgesamt.gruen{border-left-color:#34a853}.tbgesamt.gelb{border-left-color:#f2b51d}.tbgesamt.rot{border-left-color:#e0453a}
-.tbgesamt .ampel i{width:22px;height:22px}
+.tbgesamt .ampel i{width:28px;height:20px}
 .tbleg{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:8px 0}
 .tbleg span{display:inline-flex;align-items:center;gap:6px}
-.tbleg i{display:inline-block;width:12px;height:12px;border-radius:50%}
+.tbleg i{display:inline-block;width:14px;height:12px;border-radius:4px}
 .tbleg i.rot{background:#e0453a}.tbleg i.gelb{background:#f2b51d}.tbleg i.gruen{background:#34a853}
-@media (max-width:640px){.matrix.tb .m.amp{width:84px}.ampel{gap:4px;padding:4px 5px}.ampel i,.ampel button{width:20px;height:20px}}
+@media (max-width:640px){.matrix.tb .m.amp{width:128px}.ampel{gap:5px}.ampel button{width:36px;height:40px}}
 /* Aufgaben (Erinnerungen und Planner) im Matrix-Format */
 .matrix .m.dat{width:110px;white-space:nowrap}
 .matrix td.faellig{color:var(--err);font-weight:700}
@@ -346,6 +350,6 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 .matrix.er2 tr.unter th,.matrix.er2 tr.unter td{background:var(--sunken);font-size:14px}
 .matrix.er2 tr.unter th span{font-weight:400}
 .matrix small.notiz{font-style:italic}
-.ampel.klein{padding:3px 5px;gap:3px}.ampel.klein i{width:12px;height:12px}
+.ampel.klein{gap:3px}.ampel.klein i{width:14px;height:12px;border-radius:4px}
 @media (max-width:640px){.matrix .m.dat{width:84px;font-size:13px}}
 @media print{.matrix tr.gr td{background:#ddd!important;color:#000!important}.matrix .pf{display:none}}
