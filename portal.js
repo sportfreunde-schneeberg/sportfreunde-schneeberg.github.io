@@ -1714,6 +1714,18 @@ function route(){
   window.scrollTo(0, 0);
 }
 $("abmelden").addEventListener("click", abmelden);
+/* Handy und Tablet: Tabellen mit Kopfzeile werden auf schmalen Bildschirmen als Karten gestapelt (CSS .stapel).
+   Jede Zelle bekommt dafür die Spaltenüberschrift als data-label. Tabellen ohne Kopf (z. B. Dienstplan) bleiben seitlich wischbar. */
+function stapeln(wurzel){ (wurzel || document).querySelectorAll("table.tabelle").forEach(function(t){
+  var kopf = t.querySelector("thead tr"); if(!kopf) return;
+  var namen = Array.prototype.map.call(kopf.children, function(th){ return th.textContent.trim(); });
+  t.classList.add("stapel");
+  t.querySelectorAll("tbody tr").forEach(function(tr){ Array.prototype.forEach.call(tr.children, function(td, i){ if(!td.hasAttribute("data-label")) td.setAttribute("data-label", namen[i] || ""); }); });
+  /* Tablet: ist die Tabelle deutlich breiter als der Platz, ebenfalls als Karten zeigen */
+  t.classList.remove("eng"); var box = t.parentElement;
+  if(window.innerWidth > 640 && window.innerWidth <= 1100 && box && t.scrollWidth > box.clientWidth * 1.15) t.classList.add("eng"); }); }
+window.addEventListener("resize", function(){ clearTimeout(stapeln.r); stapeln.r = setTimeout(function(){ stapeln(seite()); }, 150); });
+new MutationObserver(function(){ clearTimeout(stapeln.t); stapeln.t = setTimeout(function(){ stapeln(seite()); }, 30); }).observe(seite(), {childList: true, subtree: true});
 /* Neue Fassung erkennen: GitHub Pages lässt die Startseite bis zu 10 Minuten im Browser-Zwischenspeicher.
    Weicht die Version auf dem Server ab, lädt die Seite einmal frisch nach. */
 (function(){ var eigene = ((document.querySelector('script[src^="portal.js"]') || {}).getAttribute || function(){ return ""; }).call(document.querySelector('script[src^="portal.js"]'), "src") || "";

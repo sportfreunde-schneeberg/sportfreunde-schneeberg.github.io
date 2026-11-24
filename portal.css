@@ -218,3 +218,71 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 .tabelle.er tr.unter td{font-size:13.5px}
 .tabelle.er td.unter{position:relative}
 .tabelle.er td.unter::before{content:"↳";position:absolute;margin-left:-16px;color:var(--muted)}
+/* Handy: Tabellen als Karten (gesetzt von stapeln() in portal.js) */
+@media (max-width:640px){
+  .tabelle.stapel{border:none;background:none;border-radius:0}
+  .tabelle.stapel thead{display:none}
+  .tabelle.stapel,.tabelle.stapel tbody,.tabelle.stapel tr,.tabelle.stapel td{display:block;width:100%}
+  .tabelle.stapel tr{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:6px 10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .tabelle.stapel tbody tr:nth-child(even) td{background:none}
+  .tabelle.stapel td{border:none;padding:5px 0;display:flex;gap:10px;align-items:baseline;justify-content:space-between;text-align:right;min-height:0}
+  .tabelle.stapel td::before{content:attr(data-label);font-size:12px;font-weight:700;color:var(--muted);text-align:left;flex:0 0 38%;max-width:38%}
+  .tabelle.stapel td[data-label=""]::before{display:none}
+  .tabelle.stapel tr.gruppe td{border-top:none}
+  .tabelle.stapel tr.gruppe{border-top:3px solid var(--kopf)}
+  .tabelle.stapel td[data-label=""]{justify-content:flex-end}
+  .tabelle.stapel td:first-child{font-size:15.5px;text-align:left;justify-content:flex-start;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:3px}
+  .tabelle.stapel td:first-child::before{display:none}
+  .tabelle.stapel td:empty{display:none}
+  .tabelle.stapel td.z{text-align:right}
+  /* Eingaben (Tombola, Ausleihe) volle Breite */
+  .tabelle.stapel td input,.tabelle.stapel td select{flex:1 1 auto;min-width:0!important;max-width:none!important;width:auto}
+  .tabelle.tombola td:nth-child(4),.tabelle.tombola td:nth-child(5){flex-wrap:wrap}
+  .tabelle.tombola td:nth-child(4) input,.tabelle.tombola td:nth-child(5) input{flex-basis:55%}
+  .tabelle.stapel tr.zugesagt td,.tabelle.stapel tr.geaendert td,.tabelle.stapel tr.laeuft td{background:none!important}
+  .tabelle.stapel tr.zugesagt{background:#dcefe0}
+  .tabelle.stapel tr.geaendert{background:#fff3c4}
+  .tabelle.stapel tr.laeuft{background:#dcefe0}
+  /* Erinnerungen und Planner: Unteraufgaben leicht eingerückt */
+  .tabelle.er.stapel tr.unter{margin-left:16px}
+  .tabelle.er.stapel td.unter{padding-left:0!important}
+  .tabelle.er.stapel td.unter::before{display:none}
+}
+/* Tablet: zu breite Tabellen (Klasse .eng, gesetzt von stapeln()) ebenfalls als Karten */
+
+.tabelle.stapel.eng{border:none;background:none;border-radius:0}
+.tabelle.stapel.eng thead{display:none}
+.tabelle.stapel.eng,.tabelle.stapel.eng tbody,.tabelle.stapel.eng tr,.tabelle.stapel.eng td{display:block;width:100%}
+.tabelle.stapel.eng tr{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:6px 10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.tabelle.stapel.eng tbody tr:nth-child(even) td{background:none}
+.tabelle.stapel.eng td{border:none;padding:5px 0;display:flex;gap:10px;align-items:baseline;justify-content:space-between;text-align:right;min-height:0}
+.tabelle.stapel.eng td::before{content:attr(data-label);font-size:12px;font-weight:700;color:var(--muted);text-align:left;flex:0 0 38%;max-width:38%}
+.tabelle.stapel.eng td[data-label=""]::before{display:none}
+.tabelle.stapel.eng tr.gruppe td{border-top:none}
+.tabelle.stapel.eng tr.gruppe{border-top:3px solid var(--kopf)}
+.tabelle.stapel.eng td[data-label=""]{justify-content:flex-end}
+.tabelle.stapel.eng td:first-child{font-size:15.5px;text-align:left;justify-content:flex-start;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:3px}
+.tabelle.stapel.eng td:first-child::before{display:none}
+.tabelle.stapel.eng td:empty{display:none}
+.tabelle.stapel.eng td.z{text-align:right}
+/* Eingaben (Tombola, Ausleihe) volle Breite */
+.tabelle.stapel.eng td input,.tabelle.stapel.eng td select{flex:1 1 auto;min-width:0!important;max-width:none!important;width:auto}
+.tabelle.tombola td:nth-child(4),.tabelle.tombola td:nth-child(5){flex-wrap:wrap}
+.tabelle.tombola td:nth-child(4) input,.tabelle.tombola td:nth-child(5) input{flex-basis:55%}
+.tabelle.stapel.eng tr.zugesagt td,.tabelle.stapel.eng tr.geaendert td,.tabelle.stapel.eng tr.laeuft td{background:none!important}
+.tabelle.stapel.eng tr.zugesagt{background:#dcefe0}
+.tabelle.stapel.eng tr.geaendert{background:#fff3c4}
+.tabelle.stapel.eng tr.laeuft{background:#dcefe0}
+/* Erinnerungen und Planner: Unteraufgaben leicht eingerückt */
+.tabelle.er.stapel tr.unter{margin-left:16px}
+.tabelle.er.stapel td.unter{padding-left:0!important}
+.tabelle.er.stapel td.unter::before{display:none}
+
+@media (max-width:640px) and (prefers-color-scheme:dark){
+  .tabelle.stapel tr.zugesagt,.tabelle.stapel tr.laeuft{background:#1f3a26}
+  .tabelle.stapel tr.geaendert{background:#3d3416}
+}
+@media (prefers-color-scheme:dark){
+  .tabelle.stapel.eng tr.zugesagt,.tabelle.stapel.eng tr.laeuft{background:#1f3a26}
+  .tabelle.stapel.eng tr.geaendert{background:#3d3416}
+}
