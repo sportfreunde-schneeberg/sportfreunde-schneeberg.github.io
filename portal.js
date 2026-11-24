@@ -1180,8 +1180,8 @@ function erinnerungenKarte(s){
     var box = el("div"); add(k, box);
     function passt(a){ if(ER_FILTER === "dringend") return a.prioritaet === "hoch"; if(ER_FILTER === "faellig") return !!a.faellig; if(ER_FILTER === "zugewiesen") return (a.zustaendig || []).length > 0; return true; }
     /* Matrix-Darstellung: Hauptaufgaben fett, Unteraufgaben eingerückt und zugeklappt (antippen klappt auf). */
-    var auf = {}, alleAuf = false;
-    var knopf = btn("klein", "Alle aufklappen", function(){ alleAuf = !alleAuf; knopf.textContent = alleAuf ? "Alle zuklappen" : "Alle aufklappen"; auf = {}; zeigen(); });
+    var auf = {}, alleAuf = true; /* standardmäßig alles ausgeklappt (Wunsch 24.11.2026) */
+    var knopf = btn("klein", "Alle zuklappen", function(){ alleAuf = !alleAuf; knopf.textContent = alleAuf ? "Alle zuklappen" : "Alle aufklappen"; auf = {}; zeigen(); });
     filter.parentNode.parentNode.appendChild(knopf);
     function zeile(a, tiefe, tb, offen, schluessel){ var ueber = a.faellig && a.faellig.slice(0, 10) < heute, unter = (a.unteraufgaben || []).length;
       var nm = el("th", tiefe ? "unter" : null); if(tiefe) nm.style.paddingLeft = (8 + tiefe * 20) + "px";
@@ -1201,7 +1201,7 @@ function erinnerungenKarte(s){
       add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", "breit", "Zuständig"), el("th", "m dat", "Fällig"))), tb);
       (function lauf(liste, tiefe, sichtbar){ liste.forEach(function(a, i){
         var unter = a.unteraufgaben || [], trifft = ER_FILTER === "alle" ? true : (passt(a) || unter.some(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }));
-        if(!trifft) return; var sl = tiefe + ":" + (a.id || a.titel), offen = ER_FILTER !== "alle" || alleAuf || !!auf[sl] || tiefe > 0;
+        if(!trifft) return; var sl = tiefe + ":" + (a.id || a.titel), offen = ER_FILTER !== "alle" || tiefe > 0 || (sl in auf ? auf[sl] : alleAuf);
         if(sichtbar) zeile(a, tiefe, tb, offen, sl); n++;
         lauf(ER_FILTER === "alle" || passt(a) ? unter : unter.filter(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }), tiefe + 1, sichtbar && offen); }); })(alle, 0, true);
       if(!n){ add(box, el("p", "lead", "Keine Erinnerungen in dieser Ansicht.")); return; }
