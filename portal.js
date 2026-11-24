@@ -1418,30 +1418,44 @@ var TB_SP = ["preis", "firma", "ansprech", "tel", "am", "von", "zugesagt", "abge
 function tombolaListe(w){ var k = (w[3] || []).map(function(x){ return txt(x).toLowerCase(); }); return k[0] === "nr" && k[1] === "preis" && /firma/.test(k[2] || ""); }
 function tombolaZeilen(w){ var out = []; for(var z = 5; z <= w.length; z++){ var nr = zelle(w, z, 0); if(typeof nr !== "number") continue;
   var o = {zeile: z, nr: nr}; TB_SP.forEach(function(k, i){ o[k] = zelle(w, z, i + 1); }); out.push(o); } return out; }
-/* Darstellung „Gruppiert mit Matrix“ (wie Schlüssel/Inventar): Firma · wer kümmert sich (Angefragt von) · besorgt (Abgeholt).
-   Gruppen „Noch zu besorgen“ und „Besorgt“. „Besorgt“ lässt sich per Tipp umschalten; Zeile antippen öffnet alle Felder. */
+/* Tombola als Liste in fester Reihenfolge (Nr) mit drei Ampeln je Eintrag, von denen immer nur eine leuchtet:
+   rot = noch nicht angesprochen, gelb = in Besorgung, grün = erledigt. Abgeleitet aus vorhandenen Spalten (keine neue Spalte):
+   grün = Abgeholt „Ja“; gelb = Angefragt am gesetzt oder Zugesagt „Ja“; sonst rot.
+   Antippen einer Ampel setzt: grün → Abgeholt Ja; gelb → Abgeholt leer, Angefragt am (falls leer) = heute; rot → Abgeholt leer, Angefragt am leer, Zugesagt offen.
+   Die Gesamtampel vor der Liste ist grün, wenn alle Einträge grün sind. Zeile antippen öffnet alle Felder. */
 function tombolaEditor(d, b){
-  var box = el("div"), sum = el("div", "summe"), zeilen = tombolaZeilen(b.werte), liste = el("div", "scroll");
+  var box = el("div"), sum = el("div", "summe"), zeilen = tombolaZeilen(b.werte), liste = el("div", "scroll"), gesamt = el("div", "tbgesamt");
   var ex = el("a", null, "In Excel öffnen"); ex.href = d.webUrl; ex.target = "_blank"; ex.rel = "noopener";
   var ja = function(v){ return /^ja/i.test(txt(v)); }, belegt = function(z){ return txt(z.firma) || txt(z.preis); };
+  var STUFE = [["rot", "noch nicht angesprochen"], ["gelb", "in Besorgung"], ["gruen", "erledigt"]];
+  function stufe(z){ return ja(z.abgeholt) ? 2 : ((typeof z.am === "number" || txt(z.am)) || ja(z.zugesagt) ? 1 : 0); }
+  function ampel(st, klein){ var a = el("span", "ampel" + (klein ? " klein" : "")); STUFE.forEach(function(x, i){ add(a, el("i", x[0] + (i === st ? " an" : ""))); }); return a; }
   var neuBtn = btn("primary", "+ Neuer Eintrag", function(){ var z = zeilen.filter(function(x){ return !belegt(x); })[0];
     if(!z){ zeigeToast("Keine freie Zeile mehr – bitte in Excel Zeilen einfügen."); return; } dialog(z); });
-  add(box, add(el("p", "lead"), "Eintrag antippen zum Bearbeiten, „Besorgt“ antippen zum Abhaken. Gespeichert wird in der Excel in Teams. ", ex), sum, add(el("div", "reihe"), neuBtn), liste);
-  function zaehlen(){ var n = 0, bes = 0, zu = 0, wert = 0; zeilen.forEach(function(z){ if(!belegt(z)) return; n++; if(ja(z.abgeholt)) bes++; if(ja(z.zugesagt)) zu++; wert += zahl(z.wert) || 0; });
-    sum.textContent = ""; add(sum, add(el("span"), "Einträge ", el("b", null, String(n))), add(el("span"), "zugesagt ", el("b", null, String(zu))), add(el("span"), "besorgt ", el("b", null, String(bes))), add(el("span"), "Wert ", el("b", null, euro(wert)))); }
+  var leg = el("div", "tbleg"); STUFE.forEach(function(x){ add(leg, add(el("span"), el("i", x[0] + " an"), x[1])); });
+  add(box, add(el("p", "lead"), "Ampel antippen, um den Stand zu setzen. Eintrag antippen für alle Angaben. Gespeichert wird in der Excel in Teams. ", ex), gesamt, sum, leg, add(el("div", "reihe"), neuBtn), liste);
+  function zaehlen(){ var n = [0, 0, 0], wert = 0, alle = 0; zeilen.forEach(function(z){ if(!belegt(z)) return; alle++; n[stufe(z)]++; wert += zahl(z.wert) || 0; });
+    sum.textContent = ""; add(sum, add(el("span"), "Einträge ", el("b", null, String(alle))), add(el("span"), "offen ", el("b", null, String(n[0]))), add(el("span"), "in Besorgung ", el("b", null, String(n[1]))), add(el("span"), "erledigt ", el("b", null, String(n[2]))), add(el("span"), "Wert ", el("b", null, euro(wert))));
+    var g = !alle ? 0 : (n[2] === alle ? 2 : (n[0] === alle ? 0 : 1));
+    gesamt.textContent = ""; gesamt.className = "tbgesamt " + STUFE[g][0]; add(gesamt, ampel(g), el("b", null, !alle ? "Noch keine Einträge" : (g === 2 ? "Alles erledigt" : n[2] + " von " + alle + " erledigt"))); }
+  function setzen(z, ziel, knopf){ var w = tombolaWerte(z);
+    if(ziel === 2) w[7] = "Ja";
+    else if(ziel === 1){ w[7] = ""; if(!(typeof z.am === "number" || txt(z.am))) w[4] = datumZuSerie(new Date()); }
+    else { w[7] = ""; w[4] = ""; w[6] = "offen"; }
+    knopf.disabled = true; speichern(z, w).catch(function(){ knopf.disabled = false; }); }
   function zeigen(){ liste.textContent = ""; zaehlen();
-    var t = el("table", "matrix"), k = el("tr"); add(k, el("th", null, "Firma / Spender"), el("th", "breit", "Preis"), el("th", null, "Kümmert sich"), el("th", "m bez", "Besorgt"), el("th", "pf")); add(t, add(el("thead"), k));
-    var tb = el("tbody"), gruppen = [["Noch zu besorgen", function(z){ return !ja(z.abgeholt); }], ["Besorgt", function(z){ return ja(z.abgeholt); }]], n = 0;
-    gruppen.forEach(function(g){ var r = zeilen.filter(function(z){ return belegt(z) && g[1](z); }); if(!r.length) return; n += r.length;
-      add(tb, add(el("tr", "gr"), el("td", null, g[0] + " · " + r.length))); tb.lastChild.firstChild.colSpan = 5;
-      r.forEach(function(z){ var tr = el("tr", /^nein/i.test(txt(z.zugesagt)) ? "aus" : null), nm = el("th");
-        add(nm, el("b", null, txt(z.firma) || "–"));
-        var info = [txt(z.preis), ja(z.zugesagt) ? "zugesagt" : (/^nein/i.test(txt(z.zugesagt)) ? "abgesagt" : "")].filter(Boolean).join(" · ");
-        if(info) add(nm, el("small", "nurhandy", info)); if(ja(z.zugesagt) || /^nein/i.test(txt(z.zugesagt))) add(nm, el("small", "breit", ja(z.zugesagt) ? "zugesagt" : "abgesagt")); if(txt(z.bem)) add(nm, el("small", null, txt(z.bem)));
-        var chip = el("button", "chip " + (ja(z.abgeholt) ? "ok" : "offen"), ja(z.abgeholt) ? "✓" : "offen"); chip.type = "button"; chip.title = "Besorgt umschalten";
-        chip.addEventListener("click", function(ev){ ev.stopPropagation(); var w = tombolaWerte(z); w[7] = ja(z.abgeholt) ? "" : "Ja"; chip.disabled = true; speichern(z, w).catch(function(){ chip.disabled = false; }); });
-        add(tr, nm, el("td", "breit", txt(z.preis)), el("td", null, txt(z.von) || "–"), add(el("td", "m bez"), chip), el("td", "pf", "›"));
-        matrixKlick(tr, function(){ dialog(z); }); add(tb, tr); }); });
+    var t = el("table", "matrix tb"), k = el("tr"); add(k, el("th", "breit", "Nr"), el("th", null, "Firma / Spender"), el("th", "breit", "Preis"), el("th", null, "Kümmert sich"), el("th", "m amp", "Stand"), el("th", "pf")); add(t, add(el("thead"), k));
+    var tb = el("tbody"), n = 0;
+    zeilen.forEach(function(z){ if(!belegt(z)) return; n++; var st = stufe(z), tr = el("tr", /^nein/i.test(txt(z.zugesagt)) ? "aus" : null), nm = el("th");
+      add(nm, el("b", null, txt(z.firma) || "–"));
+      var info = [txt(z.preis), ja(z.zugesagt) ? "zugesagt" : (/^nein/i.test(txt(z.zugesagt)) ? "abgesagt" : "")].filter(Boolean).join(" · ");
+      if(info) add(nm, el("small", "nurhandy", info)); if(ja(z.zugesagt) || /^nein/i.test(txt(z.zugesagt))) add(nm, el("small", "breit", ja(z.zugesagt) ? "zugesagt" : "abgesagt")); if(txt(z.bem)) add(nm, el("small", null, txt(z.bem)));
+      var amp = el("td", "m amp"), a = el("span", "ampel");
+      STUFE.forEach(function(x, i){ var kn = el("button", x[0] + (i === st ? " an" : "")); kn.type = "button"; kn.title = x[1]; kn.setAttribute("aria-label", x[1]); kn.setAttribute("aria-pressed", i === st ? "true" : "false");
+        kn.addEventListener("click", function(ev){ ev.stopPropagation(); if(i !== stufe(z)) setzen(z, i, kn); }); add(a, kn); });
+      add(amp, a);
+      add(tr, el("td", "breit", String(z.nr)), nm, el("td", "breit", txt(z.preis)), el("td", null, txt(z.von) || "–"), amp, el("td", "pf", "›"));
+      matrixKlick(tr, function(){ dialog(z); }); add(tb, tr); });
     add(t, tb); if(n) add(liste, t); else add(liste, el("p", "lead", "Noch keine Einträge."));
     var frei = zeilen.filter(function(z){ return !belegt(z); }).length;
     add(liste, el("p", "grau", frei ? frei + " freie Zeilen in der Liste. Mehr Zeilen: in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen." : "Keine freie Zeile mehr – in Excel über der Zusammenfassung Zeilen einfügen und Nr fortführen.")); }
