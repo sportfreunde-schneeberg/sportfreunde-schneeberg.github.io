@@ -1523,6 +1523,14 @@ function route(){
   window.scrollTo(0, 0);
 }
 $("abmelden").addEventListener("click", abmelden);
+/* Neue Fassung erkennen: GitHub Pages lässt die Startseite bis zu 10 Minuten im Browser-Zwischenspeicher.
+   Weicht die Version auf dem Server ab, lädt die Seite einmal frisch nach. */
+(function(){ var eigene = ((document.querySelector('script[src^="portal.js"]') || {}).getAttribute || function(){ return ""; }).call(document.querySelector('script[src^="portal.js"]'), "src") || "";
+  if(TEST || location.protocol === "file:" || !/v=\d+/.test(eigene) || /[#&](code|error|state)=/.test(location.hash)) return;
+  fetch(location.pathname, {cache: "reload"}).then(function(r){ return r.ok ? r.text() : ""; }).then(function(t){
+    var m = /portal\.js\?v=(\d+)/.exec(t || ""), mein = /v=(\d+)/.exec(eigene)[1];
+    if(m && m[1] !== mein){ var k = "spfrNeuGeladen" + m[1]; try{ if(sessionStorage.getItem(k)) return; sessionStorage.setItem(k, "1"); }catch(_){ return; }
+      fetch("portal.css?v=" + m[1], {cache: "reload"}).catch(function(){}).then(function(){ location.reload(); }); } }).catch(function(){}); })();
 window.addEventListener("hashchange", route);
 if(!TEST && msalBereit()){
   pca.handleRedirectPromise().then(function(r){
