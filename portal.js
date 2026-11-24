@@ -672,7 +672,8 @@ function twFinden(){
     return gf("/drives/" + d.id + "/root:/" + pfadK(TW.datei) + "?$select=id").then(function(it){ return twIds = {wb: "/drives/" + d.id + "/items/" + it.id + "/workbook"}; }); });
 }
 var TwLive = {
-  lesen: function(){ return twFinden().then(function(I){ return gf(I.wb + "/tables('Bestellungen')/range?$select=address,values"); }).then(function(b){ return ausrichten(b.address, b.values || []); }); },
+  /* Lesen in derselben Excel-Sitzung wie das Schreiben, sonst kommt kurz nach dem Abhaken noch der alte Stand zurück. */
+  lesen: function(){ return twFinden().then(function(I){ return gf(I.wb + "/tables('Bestellungen')/range?$select=address,values", twSess ? {sitzung: twSess} : {}); }).then(function(b){ return ausrichten(b.address, b.values || []); }); },
   preise: function(){ return twFinden().then(function(I){ return gf(I.wb + "/tables('Artikel')/range?$select=values"); }).then(function(b){ return twPreisliste(b.values || []); }); },
   schreiben: function(adresse, werte){
     var einmal = function(){ return twFinden().then(function(I){
