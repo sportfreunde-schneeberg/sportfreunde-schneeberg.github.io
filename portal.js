@@ -1041,7 +1041,7 @@ function ortLaden(){
 }
 /* Zuschaltbare Ebenen im Vereinskalender (je Browser gemerkt): Termine im Ort (Gemeinde, Homepage), Spiele (fussball.de), Training (Übersicht Training_Spiel) */
 function ebeneLesen(k, std){ try{ var v = localStorage.getItem(k); return v ? v === "an" : std; }catch(_){ return std; } }
-var EBENEN = {ort: ebeneLesen("spfrOrtTermine", true), spiele: ebeneLesen("spfrSpiele", true), training: ebeneLesen("spfrTraining", false)};
+var EBENEN = {ort: ebeneLesen("spfrOrtTermine", false), spiele: ebeneLesen("spfrSpiele", true), training: ebeneLesen("spfrTraining", false)};
 var EBENE_KEY = {ort: "spfrOrtTermine", spiele: "spfrSpiele", training: "spfrTraining"};
 /* Trainingstermine eines Monats aus der „Übersicht Training_Spiel“ (Team Jugend): Zeilen mit „Training“ in Spalte B,
    Wochentage aus der Kopfzeile (Montag …), Zelle = Uhrzeit (z. B. „17.00 - 18.30“, „19 -20.30 Uhr“, „A - 18.30-20.00“, „x“).
@@ -1125,7 +1125,8 @@ function seiteKalender(s, monatTeil){
 }
 /* Unter dem Kalender: Export als .ics und Anleitung zum Abonnieren */
 function kalAnleitung(s){
-  var box = el("div", "karte anleitung");
+  /* standardmäßig zugeklappt, damit der Kalender nicht überfrachtet wirkt */
+  var box = el("details", "karte anleitung zu");
   var exp = btn("", "📅 Vereinstermine der nächsten 12 Monate als .ics", function(){ exp.disabled = true;
     var h = new Date(), von = h.getFullYear() + "-" + pad(h.getMonth() + 1) + "-01T00:00:00", bis = (h.getFullYear() + 1) + "-" + pad(h.getMonth() + 1) + "-01T00:00:00";
     KALQ().termine(von, bis).then(function(l){ var liste = l.map(icsAusOutlook).filter(Boolean);
@@ -1136,7 +1137,7 @@ function kalAnleitung(s){
   var kopie = btn("klein", "Abo-Link kopieren", function(){ (navigator.clipboard ? navigator.clipboard.writeText(ORT_ABO) : Promise.reject()).then(function(){ zeigeToast("Link kopiert ✓"); }, function(){ prompt("Abo-Link der Gemeinde:", ORT_ABO); }); });
   function schritt(titel, teile){ var d = el("details"), su = el("summary", null, titel); add(d, su); teile.forEach(function(x){ add(d, typeof x === "string" ? el("p", null, x) : x); }); return d; }
   function liste(punkte){ var ol = el("ol"); punkte.forEach(function(x){ add(ol, el("li", null, x)); }); return ol; }
-  add(box, el("h2", null, "📲 Kalender aufs Handy oder in Outlook holen"),
+  add(box, el("summary", "titel", "📲 Kalender aufs Handy oder in Outlook holen (Export, Abo, Anleitung)"),
     add(el("div", "reihe"), exp, abo, kopie),
     schritt("1. Vereinskalender live in Outlook (für alle Vereinskonten, empfohlen)", [
       "Alle Vereinskonten (…@1928schneeberg.de) haben am 24.11.2026 eine Freigabe-Einladung per Mail bekommen: lesen dürfen alle, eintragen und ändern die Verwaltung und einzelne Ausschussmitglieder.",
@@ -1520,7 +1521,14 @@ var BwLive = {
           var wb = "/drives/" + d + "/items/" + it.id + "/workbook";
           return gf(wb + "/worksheets?$select=name").then(function(ws){ var n = (ws.value.filter(function(w){ return /rech/i.test(w.name); })[0] || ws.value[0]).name;
             return gf(wb + blattPfad(n) + "/usedRange(valuesOnly=true)?$select=values").then(function(b){ return {blatt: n, werte: b.values || []}; }); }); }).catch(function(){ return null; }) : Promise.resolve(null);
-        return liste.then(function(l){ return {wurzel: wurzel, jahr: jahr, jahrDateien: r[0], vertraege: r[1], excel: xl, liste: l}; }); }); }); }); }
+        /* Bestand der Banden (Banden_Bestand.xlsx, Blatt „Bestand“, Kopf Zeile 4, ab Zeile 5) */
+        var bdatei = wurzel.filter(function(x){ return x.file && /^banden_bestand\.xlsx$/i.test(x.name); })[0];
+        var bestand = bdatei ? gf("/drives/" + d + "/root:/" + pfadK(PR.basis + "/" + BAND + "/" + bdatei.name) + "?$select=id").then(function(it){
+          var wb = "/drives/" + d + "/items/" + it.id + "/workbook";
+          return gf(wb + blattPfad("Bestand") + "/usedRange(valuesOnly=false)?$select=address,values").then(function(b){ return {wb: wb, datei: bdatei, werte: ausrichten(b.address, b.values || [])}; }); }).catch(function(){ return null; }) : Promise.resolve(null);
+        var kand = erinnerungenLaden().then(function(E){ return (E.aufgaben || []).filter(function(a){ return /bande/i.test(a.titel); }); }).catch(function(){ return []; });
+        return Promise.all([liste, bestand, kand]).then(function(z){ return {wurzel: wurzel, jahr: jahr, jahrDateien: r[0], vertraege: r[1], excel: xl, liste: z[0], bestand: z[1], kandidaten: z[2]}; }); }); }); }); },
+  schreiben: function(wb, adresse, werte){ return gf(wb + blattPfad("Bestand") + "/range(address='" + adresse + "')", {method: "PATCH", body: {values: werte}}); }
 };
 var BwTest = { laden: function(){ var f = function(n, ordner){ return {name: n, webUrl: "#", folder: ordner ? {} : undefined, file: ordner ? undefined : {}, lastModifiedDateTime: "2026-10-19T10:00:00Z"}; };
   return Promise.resolve({wurzel: [f("Bandenwerbung.docx"), f("2026 Rechnungen", 1), f("2025 Rechnungen", 1), f("neu ab 2024", 1)], jahr: f("2026 Rechnungen", 1),
@@ -1528,8 +1536,71 @@ var BwTest = { laden: function(){ var f = function(n, ordner){ return {name: n, 
     liste: {blatt: "Rechung", werte: [["", "Anschrift1", "Anschrift2", "Straße", "PLZ", "Ort", "lfdm", "Preisl", "Netto", "MWST", "Brutto", "", "", "", "", "renr"],
       ["Bande 1", "Firma A (Beispiel)", "", "", "", "Schneeberg", 3, 33.23, 99.69, 18.94, 118.63, "", "", "", "", 2020001],
       ["", "Firma B (Beispiel)", "", "", "", "Miltenberg", 6, 33.23, 199.38, 37.88, 237.26, "", "", "", "", 2020002],
-      ["Bande 2", "Firma C (Beispiel)", "", "", "", "Amorbach", 3, "35,00", 105, 19.95, 124.95, "", "", "", "", 2020003]]}}); } };
+      ["Bande 2", "Firma C (Beispiel)", "", "", "", "Amorbach", 3, "35,00", 105, 19.95, 124.95, "", "", "", "", 2020003]]},
+    bestand: {wb: "test", datei: f("Banden_Bestand.xlsx"), werte: (function(){ var w = [["Banden – Bestand"], [""], [], ["Nr", "Standort", "Art", "Länge (m)", "Höhe (m)", "Status", "Werbepartner", "Bemerkung"]];
+      w.push([1, "Längsseite Hütte", "Bande", 3, 0.8, "belegt", "Firma A (Beispiel)", ""], [2, "Längsseite Hütte", "Bande", 3, 0.8, "frei", "", ""], [3, "Hütte (Lager)", "Bande", 3, 0.8, "Reserve", "", "Beispiel"]);
+      for(var i = 4; i <= 8; i++) w.push([i, "", "", "", "", "", "", ""]); return w; })()},
+    kandidaten: [{titel: "Bandenwerbung", unteraufgaben: [{titel: "Firma X (Beispiel)", unteraufgaben: []}, {titel: "Firma Y (Beispiel)", unteraufgaben: []}]}]}); },
+  schreiben: function(wb, adresse, werte){ window.__banden = (window.__banden || []).concat([{adresse: adresse, werte: werte}]); return Promise.resolve(); } };
 function BWQ(){ return TEST ? BwTest : BwLive; }
+function bandenBestand(s, D){
+  var box = el("div"); add(s, box);
+  var schreibt = darf("verwaltung"), B = D.bestand;
+  add(box, el("h2", null, "Bestand der Banden"));
+  if(!B){ add(box, el("p", "lead", "„Banden_Bestand.xlsx“ wurde im Ordner 06_Bandenwerbung nicht gefunden oder ist nicht lesbar.")); return; }
+  var w = B.werte, zeilen = [];
+  for(var z = 5; z <= w.length; z++){ var nr = zelle(w, z, 0); if(typeof nr !== "number") continue;
+    zeilen.push({zeile: z, nr: nr, standort: txt(zelle(w, z, 1)), art: txt(zelle(w, z, 2)), laenge: bwZahl(zelle(w, z, 3)), hoehe: bwZahl(zelle(w, z, 4)), status: txt(zelle(w, z, 5)), partner: txt(zelle(w, z, 6)), bem: txt(zelle(w, z, 7))}); }
+  var belegt = function(x){ return x.standort || x.laenge != null || x.status || x.partner; };
+  var sum = {anz: 0, m: 0, belegt: 0, frei: 0, res: 0, resAnz: 0, freiAnz: 0};
+  zeilen.forEach(function(x){ if(!belegt(x)) return; sum.anz++; var l = x.laenge || 0; sum.m += l;
+    if(/^reserve/i.test(x.status)){ sum.res += l; sum.resAnz++; } else if(/^frei/i.test(x.status)){ sum.frei += l; sum.freiAnz++; } else if(/^belegt/i.test(x.status)) sum.belegt += l; });
+  var vermietet = 0; (function(){ var w2 = D.liste && D.liste.werte || []; if(w2.length < 2) return; var k = w2[0].map(function(x){ return txt(x).toLowerCase(); }), cL = k.indexOf("lfdm"), cF = k.indexOf("anschrift1");
+    w2.slice(1).forEach(function(r){ if(txt(r[cF < 0 ? 1 : cF])) vermietet += bwZahl(r[cL < 0 ? 6 : cL]) || 0; }); })();
+  add(box, add(el("div", "summe"), add(el("span"), "Banden ", el("b", null, String(sum.anz))), add(el("span"), "Gesamtlänge ", el("b", null, zahlText(rund(sum.m)) + " m")),
+    add(el("span"), "belegt ", el("b", null, zahlText(rund(sum.belegt)) + " m")), add(el("span"), "frei am Platz ", el("b", null, sum.freiAnz + " · " + zahlText(rund(sum.frei)) + " m")),
+    add(el("span"), "Reserve im Lager ", el("b", null, sum.resAnz + " · " + zahlText(rund(sum.res)) + " m")), add(el("span"), "vermietet laut Jahresliste ", el("b", null, zahlText(rund(vermietet)) + " lfdm"))));
+  if(!sum.anz) add(box, el("div", "hinweis", "Noch keine Banden erfasst. Bitte je Bande eine Zeile anlegen: Standort, Länge, Höhe und Status (belegt, frei oder Reserve im Lager)."));
+  var ex = el("a", null, "In Excel öffnen"); ex.href = B.datei.webUrl; ex.target = "_blank"; ex.rel = "noopener";
+  add(box, add(el("div", "reihe"), schreibt ? btn("primary", "+ Bande erfassen", function(){ var z0 = zeilen.filter(function(x){ return !belegt(x); })[0]; if(!z0){ zeigeToast("Keine freie Zeile mehr – bitte in Excel Zeilen ergänzen."); return; } dialog(z0); }) : null, ex));
+  if(sum.anz){
+    var t = el("table", "matrix"), tb = el("tbody"), ST = {belegt: ["ok", "belegt"], frei: ["offen", "frei"], reserve: ["grau", "Reserve"]};
+    add(t, add(el("thead"), add(el("tr"), el("th", null, "Standort"), el("th", "m", "Länge"), el("th", "m breit", "Höhe"), el("th", "m bez", "Status"), el("th", "breit", "Werbepartner"), el("th", "pf"))), tb);
+    var gruppen = {}; zeilen.filter(belegt).forEach(function(x){ var g = x.standort || "ohne Standort"; (gruppen[g] = gruppen[g] || []).push(x); });
+    Object.keys(gruppen).forEach(function(g){ var l = gruppen[g], m = l.reduce(function(a, x){ return a + (x.laenge || 0); }, 0);
+      add(tb, add(el("tr", "gr"), el("td", null, "📍 " + g + " · " + l.length + " · " + zahlText(rund(m)) + " m"))); tb.lastChild.firstChild.colSpan = 6;
+      l.forEach(function(x){ var st = ST[(x.status || "").toLowerCase()] || ["", x.status || "–"], nm = el("th");
+        add(nm, el("b", null, (x.art || "Bande") + " Nr. " + x.nr), el("small", "nurhandy", x.partner || ""), x.bem ? el("small", null, x.bem) : null);
+        var tr = el("tr", /^reserve/i.test(x.status) ? "aus" : null);
+        add(tr, nm, el("td", "m", x.laenge != null ? zahlText(x.laenge) + " m" : "–"), el("td", "m breit", x.hoehe != null ? zahlText(x.hoehe) + " m" : "–"),
+          add(el("td", "m bez"), el("span", "chip " + st[0], st[1])), el("td", "breit", x.partner || "–"), el("td", "pf", schreibt ? "›" : ""));
+        if(schreibt) matrixKlick(tr, function(){ dialog(x); });
+        add(tb, tr); }); });
+    add(box, add(el("div", "scroll"), t)); }
+  /* Mögliche neue Werbepartner aus der Erinnerungsliste */
+  var kand = []; (D.kandidaten || []).forEach(function(a){ (a.unteraufgaben || []).forEach(function(u){ kand.push(u); }); });
+  if(kand.length){ add(box, el("h3", null, "Mögliche neue Werbepartner (aus der Erinnerungsliste „Bandenwerbung“)"));
+    var ul = el("ul", "kandidaten"); kand.forEach(function(u){ add(ul, add(el("li"), el("b", null, u.titel), u.notiz ? el("span", "grau", " – " + u.notiz) : null, (u.zustaendig || []).length ? el("span", "grau", " · 👤 " + u.zustaendig.join(", ")) : null)); });
+    add(box, ul, el("p", "grau", "Freie Banden am Platz: " + sum.freiAnz + ", in Reserve: " + sum.resAnz + ". Gepflegt wird die Liste in der Erinnerungen-App.")); }
+  function dialog(x){
+    var dl = el("dialog"), f = el("form", "karte"); f.noValidate = true;
+    function feld(t, v, cls, typ){ var i = el("input"); if(typ) i.inputMode = typ; i.value = v == null ? "" : v; var l = el("label", "fld" + (cls ? " " + cls : ""), t); add(l, i); l._i = i; return l; }
+    var fS = feld("Standort (z. B. Längsseite Hütte)", x.standort, "w2"), fA = feld("Art", x.art || "Bande"), fL = feld("Länge (m)", x.laenge != null ? zahlText(x.laenge) : "", null, "decimal"),
+      fH = feld("Höhe (m)", x.hoehe != null ? zahlText(x.hoehe) : "", null, "decimal"), fP = feld("Werbepartner", x.partner, "w2"), fB = feld("Bemerkung", x.bem, "w2");
+    var sel = el("select"); ["belegt", "frei", "Reserve"].forEach(function(v){ var o = el("option", null, v === "Reserve" ? "Reserve (im Lager)" : v); o.value = v; add(sel, o); }); sel.value = x.status || "frei";
+    var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
+    add(f, el("h2", null, "Bande Nr. " + x.nr), add(el("div", "formular"), fS, fA, fL, fH, add(el("label", "fld", "Status"), sel), fP, fB),
+      add(el("div", "reihe"), ok, btn("", "Abbrechen", function(){ dl.close(); dl.remove(); })));
+    add(dl, f); document.body.appendChild(dl); dl.showModal(); fS._i.focus();
+    f.addEventListener("submit", function(ev){ ev.preventDefault();
+      var l = fL._i.value.trim(), h = fH._i.value.trim(); if(l && eingabeZahl(l) == null){ zeigeToast("Länge bitte als Zahl, z. B. 3 oder 2,5."); return; }
+      ok.disabled = true;
+      var werte = [[fS._i.value.trim(), fA._i.value.trim(), l ? eingabeZahl(l) : "", h ? (eingabeZahl(h) == null ? h : eingabeZahl(h)) : "", sel.value, fP._i.value.trim(), fB._i.value.trim()]];
+      BWQ().schreiben(B.wb, "B" + x.zeile + ":H" + x.zeile, werte).then(function(){ dl.close(); dl.remove(); zeigeToast("Bande Nr. " + x.nr + " gespeichert ✓"); route(); })
+        .catch(function(e){ ok.disabled = false; add(f, el("div", "fehler", e && e.status ? fehlerText(e) : "Speichern hat nicht geklappt.")); });
+    });
+  }
+}
 function bwZahl(v){ if(typeof v === "number") return v; var n = eingabeZahl(txt(v)); return n == null ? null : n; }
 function seiteBandenwerbung(s){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Bandenwerbung"]]);
@@ -1551,6 +1622,9 @@ function seiteBandenwerbung(s){
       li([el("b", null, "In die Jahresliste eintragen: "), "in ", link(D.excel, D.excel ? D.excel.name : "Bandenwerbung JJJJ.xlsx"), " (Blatt „" + (D.liste ? D.liste.blatt : "Rechung") + "“) eine Zeile: Firma, Anschrift, laufende Meter (lfdm), Preis je lfdm, Netto, MwSt., Brutto, Rechnungsnummer."]),
       li([el("b", null, "Rechnungen: "), "der Serienbrief ", link(serien, serien ? serien.name : "Serienbrief Rechnung JJJJ.docx"), " nimmt die Jahresliste als Datenquelle und erzeugt je Werbepartner eine Rechnung (Zeitraum 1. Juni bis 31. Mai, z. B. 2026 am 19.10. erstellt). Als PDF speichern und verschicken."]),
       li([el("b", null, "Neues Jahr: "), "Ordner „JJJJ Rechnungen“ anlegen, Jahresliste und Serienbrief vom Vorjahr hineinkopieren, Datum, Zeitraum und Rechnungsnummern anpassen. ", el("span", "grau", "(Vorschlag – so sehen die Ordner 2024–2026 aus.)")]));
+
+    /* Bestand: wie viele Banden, welche Längen, was liegt in Reserve */
+    bandenBestand(s, D);
 
     /* Werbepartner aus der neuesten Jahresliste */
     add(s, el("h2", null, "Werbepartner " + (D.jahr ? D.jahr.name.replace(/\D.*$/, "") : "") + (D.excel ? " · aus „" + D.excel.name + "“" : "")));

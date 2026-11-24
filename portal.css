@@ -384,3 +384,6 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
   .tabelle.kal.stapel td.knoepfe::before{display:none}
 }
 @media (max-width:640px){.tabelle.kal.stapel td.ort{display:none}}
+details.anleitung.zu > summary.titel{font-size:17px;font-weight:700;cursor:pointer;padding:2px 0}
+details.anleitung.zu[open] > summary.titel{margin-bottom:10px}
+.kandidaten{margin:6px 0 4px 20px;padding:0}.kandidaten li{margin:4px 0}
