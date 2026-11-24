@@ -1108,10 +1108,11 @@ function kalAnleitung(s){
   function liste(punkte){ var ol = el("ol"); punkte.forEach(function(x){ add(ol, el("li", null, x)); }); return ol; }
   add(box, el("h2", null, "📲 Kalender aufs Handy oder in Outlook holen"),
     add(el("div", "reihe"), exp, abo, kopie),
-    schritt("1. Vereinskalender live in Outlook (für den Ausschuss, empfohlen)", [
-      "So sieht man Änderungen sofort, auf dem PC und in der Outlook-App auf dem Handy.",
-      liste(["Bei der Verwaltung melden: Der Vereinskalender wird dir in Outlook freigegeben.", "Die Freigabe-Einladung kommt per Mail an dein Vereinskonto – in Outlook annehmen.",
-        "Danach steht „Vereinskalender_Spfr1928“ in Outlook in deiner Kalenderliste und hier im Portal."])]),
+    schritt("1. Vereinskalender live in Outlook (für alle Vereinskonten, empfohlen)", [
+      "Alle Vereinskonten (…@1928schneeberg.de) haben am 24.11.2026 eine Freigabe-Einladung per Mail bekommen: lesen dürfen alle, eintragen und ändern die Verwaltung und einzelne Ausschussmitglieder.",
+      liste(["In deinem Vereinskonto die Mail „…hat den Kalender „Vereinskalender_Spfr1928“ für Sie freigegeben“ öffnen und annehmen.",
+        "Danach steht „Vereinskalender_Spfr1928“ in Outlook (PC, Web und Outlook-App auf dem Handy) in deiner Kalenderliste. Änderungen kommen von selbst.",
+        "Mail nicht gefunden oder neu dabei? Bei der Verwaltung melden, dann kommt eine neue Einladung."])]),
     schritt("2. Einmalig als .ics-Datei (Stand von heute)", [
       "Knopf „Vereinstermine … als .ics“ oben drücken. Die Datei enthält alle Vereinstermine der nächsten 12 Monate.",
       liste(["iPhone/iPad: Die heruntergeladene Datei öffnen und die Termine zum Kalender hinzufügen.", "Android: Die Datei mit der Kalender-App öffnen.",
