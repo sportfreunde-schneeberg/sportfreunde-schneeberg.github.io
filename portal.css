@@ -313,3 +313,6 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
   .matrix .m{width:38px}.matrix .m.geb{width:70px}
   .matrix .pk{min-width:20px;height:20px;font-size:11px}
 }
+.matrix .m.bez{width:78px}
+.matrix td.geb small.rabatt{display:block;font-size:11.5px;color:var(--muted)}
+@media (max-width:640px){.matrix .m.bez{width:58px}.matrix .bez .chip{padding:2px 7px;font-size:12px}}

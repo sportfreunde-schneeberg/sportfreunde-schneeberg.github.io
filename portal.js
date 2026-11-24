@@ -308,6 +308,8 @@ function seiteVerwaltung(s){
 }
 
 /* --- Kabinenreinigung --- */
+/* Matrix-Zeile antippbar machen (Maus, Finger, Tastatur) */
+function matrixKlick(tr, fn){ tr.classList.add("klickbar"); tr.title = "Ändern"; tr.tabIndex = 0; tr.addEventListener("click", fn); tr.addEventListener("keydown", function(e){ if(e.key === "Enter") fn(); }); }
 function seiteReinigung(s){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Kabinenreinigung"]]);
   ladeHinweis(s);
@@ -368,18 +370,24 @@ function seiteReinigung(s){
         .catch(function(e){ speichern.disabled = false; add(f, el("div", "fehler", fehlerText(e))); });
     });
 
+    /* Darstellung „Gruppiert mit Matrix“ wie Schlüssel und Inventar: nach Jahr gruppiert, Antippen lädt den Monat ins Formular oben. */
     add(s, el("h2", null, "Bisherige Monate"));
-    var t = el("table", "tabelle"), kopf = el("tr");
-    ["Monat", "Stunden", "Satz", "Gesamt", "Zahlungen", "Bemerkung"].forEach(function(h, i){ add(kopf, el("th", i > 0 && i < 4 ? "z" : null, h)); });
-    add(t, add(el("thead"), kopf)); var tb = el("tbody");
-    liste.slice().reverse().forEach(function(r){
-      /* Zahlweg laut Excel (Zeile 2): bis April 2026 zwei Schritte (I und J), ab Mai 2026 ein Schritt (K).
-         Bezahlt ist ein Monat, wenn K = Ja oder (I und J) = Ja. */
-      var ja = function(v){ return /^(ja|n\/a)/i.test(v); };
-      var ok = ja(r.z3) || (ja(r.z1) && ja(r.z2));
-      var tr = el("tr"); add(tr, el("td", null, r.monat + " " + (r.jahr || "")), el("td", "z", r.stunden != null ? zahlText(r.stunden) : ""), el("td", "z", r.satz != null ? euro(r.satz) : ""),
-        el("td", "z", euro(r.gesamt)), add(el("td"), el("span", "chip " + (ok ? "ok" : "offen"), ok ? "bezahlt" : "offen")), el("td", null, r.bem));
-      add(tb, tr); });
+    var ja = function(v){ return /^(ja|n\/a)/i.test(v); };
+    /* Zahlweg laut Excel (Zeile 2): bis April 2026 zwei Schritte (I und J), ab Mai 2026 ein Schritt (K).
+       Bezahlt ist ein Monat, wenn K = Ja oder (I und J) = Ja. */
+    var t = el("table", "matrix"), kopf = el("tr");
+    add(kopf, el("th", null, "Monat"), el("th", "m", "Std."), el("th", "m geb breit", "Satz"), el("th", "m geb", "Gesamt"), el("th", "m bez", "Bezahlt"), el("th", "pf"));
+    add(t, add(el("thead"), kopf)); var tb = el("tbody"), nachJahr = {};
+    liste.forEach(function(r){ (nachJahr[r.jahr || 0] = nachJahr[r.jahr || 0] || []).push(r); });
+    Object.keys(nachJahr).sort(function(x, y){ return y - x; }).forEach(function(j){
+      var g = nachJahr[j].slice().reverse(), summe = g.reduce(function(m, r){ return m + (r.gesamt || 0); }, 0);
+      add(tb, add(el("tr", "gr"), el("td", null, (+j ? j : "ohne Jahr") + " · " + g.length + (g.length === 1 ? " Monat · " : " Monate · ") + euro(summe)))); tb.lastChild.firstChild.colSpan = 6;
+      g.forEach(function(r){ var ok = ja(r.z3) || (ja(r.z1) && ja(r.z2)), tr = el("tr"), nm = el("th");
+        add(nm, el("b", null, r.monat)); if(r.bem) add(nm, el("small", null, r.bem));
+        add(tr, nm, el("td", "m", r.stunden != null ? zahlText(r.stunden) : "–"), el("td", "m geb breit", r.satz != null ? euro(r.satz) : "–"), el("td", "m geb", euro(r.gesamt)),
+          add(el("td", "m bez"), el("span", "chip " + (ok ? "ok" : "offen"), ok ? "✓" : "offen")), el("td", "pf", darf("verwaltung") ? "›" : ""));
+        if(darf("verwaltung")) matrixKlick(tr, function(){ fJahr.value = r.jahr; fMonat.value = r.monat; neu(); f.scrollIntoView({behavior: "smooth", block: "start"}); fStd.focus({preventScroll: true}); });
+        add(tb, tr); }); });
     add(t, tb); add(s, add(el("div", "scroll"), t));
   }).catch(function(e){ fehlerZeigen(fehlerText(e)); });
 }
@@ -407,24 +415,35 @@ function seiteAusleihe(s, unter){
     var kz = kennzahlen(w, 12, 13, 1, 14);
     if(kz.length){ var c = el("div", "summe"); kz.forEach(function(r){ add(c, add(el("span"), r[0] + " ", el("b", null, typeof r[1] === "number" ? euro(r[1]) : txt(r[1])))); }); add(s, c); }
     if(!liste.length) add(s, el("p", "lead", "Noch keine Buchungen in " + jahr + "."));
-    /* Tabelle wie in der GUI v1.4: eine Zeile je Position, Buchungen durch eine Linie getrennt. */
+    /* Darstellung „Gruppiert mit Matrix“ wie Schlüssel und Inventar: eine Zeile je Buchung, nach Monat gruppiert.
+       Name zuerst, darunter Datum und Gegenstände. Antippen öffnet „Bearbeiten“. */
     if(liste.length){
-      var schreibt = darf("verwaltung");
-      var t = el("table", "tabelle"), kopf2 = el("tr");
-      ["Nr.", "Sub", "Datum", "Wer", "Gegenstand", "Anz.", "Listenpreis", "Preis", "Bezahlt", "Bezahlt am", "bei", "Bemerkung", ""].forEach(function(h, i){ add(kopf2, el("th", i === 5 || i === 6 || i === 7 ? "z" : null, h)); });
-      add(t, add(el("thead"), kopf2)); var tb = el("tbody");
-      liste.forEach(function(b){
-        b.pos.forEach(function(p, i){
-          var tr = el("tr", i === 0 ? "gruppe" : null);
-          var bez = /^ja/i.test(p.bezahlt) ? el("span", "chip ok", "Ja") : (b.abgesagt ? el("span", "chip grau", "abgesagt") : (p.bezahlt ? el("span", "chip offen", p.bezahlt) : null));
-          var aktion = el("td");
-          if(i === 0 && schreibt){ var ed = el("a", "btn klein", "Bearbeiten"); ed.href = "#/verwaltung/ausleihe/" + b.nr; add(aktion, ed); }
-          add(tr, el("td", null, i === 0 ? String(b.nr) : ""), el("td", null, p.sub != null ? String(p.sub) : ""), el("td", null, i === 0 ? datumText(b.datum) : ""),
-            el("td", null, i === 0 ? b.wer : ""), el("td", null, p.gegenstand || "–"), el("td", "z", String(p.anzahl || 1)),
-            el("td", "z", p.liste != null ? euro(p.liste) : ""), el("td", "z", p.preis != null ? euro(p.preis) : ""), add(el("td"), bez),
-            el("td", null, datumText(p.am)), el("td", null, p.bei), el("td", null, p.bem), aktion);
-          add(tb, tr); }); });
-      add(t, tb); add(s, add(el("div", "scroll"), t));
+      var schreibt = darf("verwaltung"), such = el("input", "suche"); such.type = "search"; such.placeholder = "Name oder Gegenstand suchen …";
+      add(s, add(el("div", "reihe"), such)); var box = el("div", "scroll"); add(s, box);
+      var monatVon = function(b){ if(!(typeof b.datum === "number" && b.datum > 20000)) return -1; var d = serieZuDatum(b.datum); return d.getUTCFullYear() * 12 + d.getUTCMonth(); };
+      var zeigen = function(){ box.textContent = ""; var q = such.value.trim().toLowerCase(), gruppen = {};
+        liste.forEach(function(b){ var text = (b.wer + " " + b.pos.map(function(p){ return p.gegenstand + " " + p.bem; }).join(" ")).toLowerCase();
+          if(q && text.indexOf(q) < 0) return; var m = monatVon(b); (gruppen[m] = gruppen[m] || []).push(b); });
+        var ms = Object.keys(gruppen).map(Number).sort(function(x, y){ return y - x; });
+        if(!ms.length){ add(box, el("p", "lead", "Keine Treffer.")); return; }
+        var t = el("table", "matrix"), k = el("tr");
+        add(k, el("th", null, "Wer"), el("th", "breit", "Nr."), el("th", "breit", "Datum"), el("th", "m geb", "Preis"), el("th", "m bez", "Bezahlt"), el("th", "pf")); add(t, add(el("thead"), k));
+        var tb = el("tbody");
+        ms.forEach(function(m){ var g = gruppen[m], summe = g.reduce(function(x, b){ return x + (b.abgesagt ? 0 : b.summe); }, 0);
+          add(tb, add(el("tr", "gr"), el("td", null, (m < 0 ? "ohne Datum" : MONATE[m % 12] + " " + Math.floor(m / 12)) + " · " + g.length + " · " + euro(summe)))); tb.lastChild.firstChild.colSpan = 6;
+          g.forEach(function(b){ var tr = el("tr", b.abgesagt ? "aus" : null), nm = el("th");
+            var dinge = b.pos.map(function(p){ return (p.anzahl > 1 ? p.anzahl + "× " : "") + (p.gegenstand || "–"); }).join(", ");
+            add(nm, el("b", null, b.wer || "–"), el("small", "nurhandy", datumText(b.datum) + " · Nr. " + b.nr), el("small", null, dinge));
+            var bem = b.pos.map(function(p){ return p.bem; }).filter(Boolean).join(" · "); if(bem) add(nm, el("small", null, bem));
+            var rab = b.liste - b.summe > 0.005 && !b.abgesagt;
+            var preis = el("td", "m geb"); add(preis, el("span", null, euro(b.summe))); if(rab) add(preis, el("small", "rabatt", "statt " + euro(b.liste)));
+            add(tr, nm, el("td", "breit", String(b.nr)), el("td", "breit", datumText(b.datum)), preis,
+              add(el("td", "m bez"), b.abgesagt ? el("span", "chip grau", "abgesagt") : el("span", "chip " + (b.bezahlt ? "ok" : "offen"), b.bezahlt ? "✓" : "offen")),
+              el("td", "pf", schreibt ? "›" : ""));
+            if(schreibt) matrixKlick(tr, function(){ location.hash = "#/verwaltung/ausleihe/" + b.nr; });
+            add(tb, tr); }); });
+        add(t, tb); add(box, t); };
+      such.addEventListener("input", zeigen); zeigen();
     }
   }).catch(function(e){ fehlerZeigen(fehlerText(e)); });
 }
@@ -584,9 +603,7 @@ function seiteSchluessel(s){
           SP.forEach(function(x){ var v = x[0] === "sonst" ? (p.sonst ? "+" : 0) : p[x[0]], td = el("td", "m");
             if(v){ var pk = el("span", "pk", String(v)); pk.style.background = x[4]; if(x[0] === "sonst") pk.title = p.sonst; add(td, pk); } else add(td, el("span", "leer", "·")); add(tr, td); });
           add(tr, el("td", "breit", p.sonst), el("td", "breit", p.best), el("td", "pf", schreibt ? "›" : ""));
-          if(schreibt){ tr.classList.add("klickbar"); tr.title = "Ändern"; tr.tabIndex = 0;
-            tr.addEventListener("click", function(){ schluesselBearbeiten(p, leute); });
-            tr.addEventListener("keydown", function(e){ if(e.key === "Enter") schluesselBearbeiten(p, leute); }); }
+          if(schreibt) matrixKlick(tr, function(){ schluesselBearbeiten(p, leute); });
           add(tb, tr); }); });
       add(t, tb); if(n) add(box, t); else add(box, el("p", "lead", "Keine Treffer.")); }
     such.addEventListener("input", zeigen); nurAktiv.addEventListener("change", zeigen); zeigen();
@@ -653,7 +670,7 @@ function seiteInventar(s){
         orte[o].sort(function(a, b){ return (a.nr || 0) - (b.nr || 0); }).forEach(function(i){ var nicht = /^nicht/i.test(i.wer), tr = el("tr", nicht ? "aus" : null), nm = el("th");
           add(nm, el("b", null, i.bez)); if(i.ort2) add(nm, el("small", null, "auch: " + i.ort2)); if(nicht) add(nm, el("small", "nurhandy", "nicht zum Ausleihen")); if(i.bem) add(nm, el("small", null, i.bem));
           add(tr, nm, el("td", "breit", i.nr != null ? String(i.nr) : ""), el("td", "m", i.anzahl != null ? String(i.anzahl) : (txt(i.anzahlRoh) || "–")), el("td", "m geb", i.gebuehr != null ? euro(i.gebuehr) : "–"), el("td", "breit", i.wer), el("td", "pf", darf2 ? "›" : ""));
-          if(darf2){ tr.classList.add("klickbar"); tr.title = "Ändern"; tr.tabIndex = 0; tr.addEventListener("click", function(){ bearbeiten(i); }); tr.addEventListener("keydown", function(e){ if(e.key === "Enter") bearbeiten(i); }); }
+          if(darf2) matrixKlick(tr, function(){ bearbeiten(i); });
           add(tb, tr); }); });
       add(t, tb); add(box, t); }
     such.addEventListener("input", zeigen); zeigen();
