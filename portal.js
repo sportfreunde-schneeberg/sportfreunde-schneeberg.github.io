@@ -1108,7 +1108,7 @@ function erinnerungenLaden(){
       {titel: "Steine setzen", notiz: "", zustaendig: [], anhaenge: 1, unteraufgaben: []},
       {titel: "Torbefestigung anschweißen", notiz: "hinteres Tor", zustaendig: ["Max"], anhaenge: 0, unteraufgaben: []}]},
     {titel: "Beispiel: Torbefestigungen", faellig: (j - 1) + "-10-01", prioritaet: "hoch", notiz: "Netzhaken fehlen", zustaendig: ["Erika"], anhaenge: 0, unteraufgaben: []}]}); }
-  return finden().then(function(i){ return gf("/drives/" + i.drive + "/root:/" + pfadK(ER_PFAD) + "?$select=id,@microsoft.graph.downloadUrl"); })
+  return finden().then(function(i){ return gf("/drives/" + i.drive + "/root:/" + pfadK(ER_PFAD) + ""); })
     .then(function(it){ return fetch(it["@microsoft.graph.downloadUrl"]); })
     .then(function(r){ if(!r.ok){ var e = new Error("Datei " + r.status); e.status = r.status; throw e; } return r.json(); });
 }
