@@ -1054,8 +1054,10 @@ function seiteAufgaben(s){
   AUQ().laden().then(function(D){
     s.textContent = "";
     add(s, el("h1", null, "Aufgaben Liegenschaften"));
+    erinnerungenKarte(s);
+    add(s, el("h2", null, "Aus Planner"));
     if(!D.plan){ add(s, el("p", "lead", "Es gibt noch keinen Planner-Plan im Team „TEAM Liegenschaften“."),
-      el("div", "hinweis", "Anlegen in Teams: Team „TEAM Liegenschaften“ › Kanal „General“ › „+“ › Planner › neuer Plan „Liegenschaften – Aufgaben“. Danach erscheinen die Aufgaben hier automatisch.")); erinnerungenKarte(s); return; }
+      el("div", "hinweis", "Anlegen in Teams: Team „TEAM Liegenschaften“ › Kanal „General“ › „+“ › Planner › neuer Plan „Liegenschaften – Aufgaben“. Danach erscheinen die Aufgaben hier automatisch.")); return; }
     var heute = new Date().toISOString().slice(0, 10);
     var lead = el("p", "lead", "Stand aus Planner („" + D.plan.title + "“) für die monatliche Ausschusssitzung. Bearbeitet wird in Planner. ");
     var pl = el("a", null, "Plan in Planner öffnen"); pl.href = auPlanLink(D.plan); pl.target = "_blank"; pl.rel = "noopener"; add(lead, pl); add(s, lead);
@@ -1090,33 +1092,57 @@ function seiteAufgaben(s){
         add(k, add(el("div", "scroll"), t)); add(box, k); });
       if(!n) add(box, el("p", "lead", "Keine Aufgaben in dieser Ansicht.")); }
     filter.addEventListener("change", zeigen); zeigen();
-    erinnerungenKarte(s);
   }).catch(function(e){ fehlerZeigen(e && (e.status === 403 || e.status === 404) ? "Kein Zugriff auf die Aufgaben. Du musst Mitglied im Team „TEAM Liegenschaften“ sein – bitte bei der Verwaltung melden." : fehlerText(e)); });
 }
 
 /* ---------- Erinnerungen (iCloud-Liste, vom Mac abgeglichen) ----------
- * Der Mac schreibt alle 30 Minuten die offenen Erinnerungen als JSON in den Teams-Ordner (Tools/erinnerungen_sync.sh).
- * Das Portal liest die Datei nur. Bearbeitet wird in der Erinnerungen-App. */
+ * Der Mac liest alle 4 Stunden die Erinnerungsliste (Tools/erinnerungen_parser.py, mit Unteraufgaben und Zuständigen)
+ * und lädt sie als JSON ins Team „TEAM - Liegenschaften“ (Tools/erinnerungen_upload.py). Das Portal liest die Datei nur.
+ * Bearbeitet wird in der Erinnerungen-App. */
 var ER_PFAD = "General/Aufgabenliste/Erinnerungen_offen.json";
+var ER_FILTER = "alle";
 function erinnerungenLaden(){
-  if(TEST){ var j = new Date().getFullYear(); return Promise.resolve({liste: "Beispielliste", stand: j + "-11-24T09:30+01:00", aufgaben: [
-    {titel: "Beispiel: Mülltonne raus", faellig: j + "-12-14", prioritaet: "hoch", notiz: ""}, {titel: "Beispiel: Torbefestigungen", faellig: null, prioritaet: "", notiz: "Netzhaken fehlen"}]}); }
+  if(TEST){ var j = new Date().getFullYear(); return Promise.resolve({liste: "Beispielliste", offen: 5, stand: j + "-11-24T15:00+01:00", aufgaben: [
+    {titel: "Beispiel: Mülltonne raus", faellig: j + "-12-14T20:30", prioritaet: "hoch", notiz: "", zustaendig: [], anhaenge: 0, unteraufgaben: []},
+    {titel: "Beispiel: Arbeitseinsatz", faellig: null, prioritaet: "", notiz: "", zustaendig: [], anhaenge: 0, unteraufgaben: [
+      {titel: "Steine setzen", notiz: "", zustaendig: [], anhaenge: 1, unteraufgaben: []},
+      {titel: "Torbefestigung anschweißen", notiz: "hinteres Tor", zustaendig: ["Max"], anhaenge: 0, unteraufgaben: []}]},
+    {titel: "Beispiel: Torbefestigungen", faellig: (j - 1) + "-10-01", prioritaet: "hoch", notiz: "Netzhaken fehlen", zustaendig: ["Erika"], anhaenge: 0, unteraufgaben: []}]}); }
   return finden().then(function(i){ return gf("/drives/" + i.drive + "/root:/" + pfadK(ER_PFAD) + "?$select=id,@microsoft.graph.downloadUrl"); })
     .then(function(it){ return fetch(it["@microsoft.graph.downloadUrl"]); })
     .then(function(r){ if(!r.ok){ var e = new Error("Datei " + r.status); e.status = r.status; throw e; } return r.json(); });
 }
+function erFaellig(f){ if(!f) return ""; var m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}))?/.exec(f); return m ? m[3] + "." + m[2] + "." + m[1] + (m[4] ? ", " + m[4] : "") : f; }
 function erinnerungenKarte(s){
-  var k = el("div", "karte"); add(k, el("h2", null, "Aus der iCloud-Erinnerungsliste"), el("p", "lead", "Wird geladen …")); add(s, k);
+  var k = el("div", "karte"); add(k, el("h2", null, "📝 Aus der Erinnerungsliste"), el("p", "lead", "Wird geladen …")); add(s, k);
   erinnerungenLaden().then(function(D){
-    k.textContent = ""; add(k, el("h2", null, "Aus der iCloud-Erinnerungsliste"));
-    var st = D.stand ? new Date(D.stand) : null;
-    add(k, el("p", "lead", (D.aufgaben || []).length + " offen · zuletzt geändert " + (st && !isNaN(st) ? st.toLocaleString("de-DE", {dateStyle: "medium", timeStyle: "short"}) : "–") + ". Bearbeitet wird in der Erinnerungen-App; der Abgleich läuft alle 30 Minuten, solange der Mac der Verwaltung an ist."));
-    var heute = heuteISO(), t = el("table", "tabelle aufg"), tb = el("tbody");
-    add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Notiz"), el("th", null, "Fällig"))), tb);
-    (D.aufgaben || []).forEach(function(a){ var ueber = a.faellig && a.faellig < heute;
-      add(tb, add(el("tr"), add(el("td"), a.prioritaet === "hoch" ? el("span", "chip offen", "dringend") : null, a.prioritaet === "hoch" ? " " : null, a.titel), el("td", null, a.notiz || "–"), el("td", ueber ? "faellig" : null, a.faellig ? isoZuText(a.faellig) : "–"))); });
-    add(k, add(el("div", "scroll"), t));
-  }).catch(function(e){ k.textContent = ""; add(k, el("h2", null, "Aus der iCloud-Erinnerungsliste"),
+    k.textContent = ""; add(k, el("h2", null, "📝 Aus der Erinnerungsliste „" + (D.liste || "") + "“"));
+    var st = D.stand ? new Date(D.stand) : null, alle = D.aufgaben || [], heute = heuteISO();
+    function zaehle(l){ return l.reduce(function(n, a){ return n + 1 + zaehle(a.unteraufgaben || []); }, 0); }
+    add(k, el("p", "lead", (D.offen || zaehle(alle)) + " offen · Stand " + (st && !isNaN(st) ? st.toLocaleString("de-DE", {dateStyle: "medium", timeStyle: "short"}) : "–") + ". Bearbeitet wird in der Erinnerungen-App; der Abgleich läuft alle 4 Stunden, solange der Mac der Verwaltung an ist."));
+    var filter = el("select"); filter.style.maxWidth = "240px";
+    [["alle", "Alle offenen"], ["dringend", "Dringend"], ["faellig", "Mit Fälligkeit"], ["zugewiesen", "Mit Zuständigen"]].forEach(function(o){ var op = el("option", null, o[1]); op.value = o[0]; add(filter, op); });
+    filter.value = ER_FILTER;
+    add(k, add(el("div", "reihe"), add(el("label", "fld", "Anzeigen"), filter)));
+    var box = el("div"); add(k, box);
+    function passt(a){ if(ER_FILTER === "dringend") return a.prioritaet === "hoch"; if(ER_FILTER === "faellig") return !!a.faellig; if(ER_FILTER === "zugewiesen") return (a.zustaendig || []).length > 0; return true; }
+    function zeile(a, tiefe, tb){ var ueber = a.faellig && a.faellig.slice(0, 10) < heute;
+      var td = el("td", tiefe ? "unter" : null); if(tiefe) td.style.paddingLeft = (8 + tiefe * 22) + "px";
+      add(td, a.prioritaet === "hoch" ? el("span", "chip offen", "dringend") : null, a.prioritaet === "hoch" ? " " : null, tiefe ? document.createTextNode(a.titel) : el("b", null, a.titel),
+        (a.unteraufgaben || []).length ? el("span", "grau", " · " + a.unteraufgaben.length + " Unteraufgaben") : null, a.anhaenge ? el("span", "grau", " · 📎 " + a.anhaenge) : null,
+        a.notiz ? el("div", "notiz", a.notiz) : null);
+      add(tb, add(el("tr", tiefe ? "unter" : "oben"), td, el("td", null, (a.zustaendig || []).join(", ") || "–"), el("td", ueber ? "faellig" : null, erFaellig(a.faellig) || "–"))); }
+    function zeigen(){ box.textContent = ""; ER_FILTER = filter.value;
+      var t = el("table", "tabelle aufg er"), tb = el("tbody"), n = 0;
+      add(t, add(el("thead"), add(el("tr"), el("th", null, "Aufgabe"), el("th", null, "Zuständig"), el("th", null, "Fällig"))), tb);
+      (function lauf(liste, tiefe){ liste.forEach(function(a){
+        var unter = a.unteraufgaben || [], trifft = ER_FILTER === "alle" ? true : (passt(a) || unter.some(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }));
+        if(!trifft) return; zeile(a, tiefe, tb); n++;
+        lauf(ER_FILTER === "alle" || passt(a) ? unter : unter.filter(function u(x){ return passt(x) || (x.unteraufgaben || []).some(u); }), tiefe + 1); }); })(alle, 0);
+      if(!n){ add(box, el("p", "lead", "Keine Erinnerungen in dieser Ansicht.")); return; }
+      add(box, add(el("div", "scroll"), t)); }
+    filter.addEventListener("change", zeigen); zeigen();
+  }).catch(function(e){ k.textContent = ""; add(k, el("h2", null, "📝 Aus der Erinnerungsliste"),
     el("p", "lead", e && e.status === 404 ? "Noch kein Abgleich vorhanden (Datei „Aufgabenliste/Erinnerungen_offen.json“ fehlt)." : "Die Erinnerungen konnten nicht geladen werden: " + fehlerText(e))); });
 }
 

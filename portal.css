@@ -213,3 +213,8 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 .tabelle.tombola tr.zugesagt td{background:#dcefe0!important}
 .tabelle.tombola tr.geaendert td{background:#fff3c4!important}
 @media (prefers-color-scheme:dark){.tabelle.tombola tr.zugesagt td{background:#1f3a26!important}.tabelle.tombola tr.geaendert td{background:#3d3416!important}}
+/* Erinnerungen: Hauptaufgaben fett, Unteraufgaben eingerückt */
+.tabelle.er tr.oben td{border-top:2px solid var(--line)}
+.tabelle.er tr.unter td{font-size:13.5px}
+.tabelle.er td.unter{position:relative}
+.tabelle.er td.unter::before{content:"↳";position:absolute;margin-left:-16px;color:var(--muted)}
