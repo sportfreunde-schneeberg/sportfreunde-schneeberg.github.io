@@ -255,7 +255,9 @@ function fehlerText(e){
   if(e && e.status === 423) return "Die Excel ist gerade gesperrt. Bitte in einer Minute noch einmal versuchen.";
   return "Das hat nicht geklappt" + (e && e.detail ? ": " + e.detail : (e && e.message ? ": " + e.message : ".")) ;
 }
-function pfad(teile){ var p = $("pfad"); p.textContent = ""; teile.forEach(function(t, i){ if(i) add(p, el("span", null, "›")); if(t[1]){ var a = el("a", null, t[0]); a.href = t[1]; add(p, a); } else add(p, el("span", null, t[0])); }); }
+function pfad(teile){ var p = $("pfad"); p.textContent = ""; var vorher = teile.length > 1 ? teile[teile.length - 2] : null;
+  if(vorher && vorher[1]){ var z = el("a", "zurueck", "‹ Zurück"); z.href = vorher[1]; add(p, z); }
+  teile.forEach(function(t, i){ if(i) add(p, el("span", null, "›")); if(t[1]){ var a = el("a", null, t[0]); a.href = t[1]; add(p, a); } else add(p, el("span", null, t[0])); }); }
 function kachel(sym, titel, text, href, gross, extern){ var a = el("a", "kachel" + (gross ? " gross" : "")); a.href = href; if(extern) a.rel = "noopener"; add(a, el("span", "sym", sym), el("b", null, titel), el("span", null, text)); return a; }
 function ladeHinweis(s){ s.textContent = ""; add(s, el("div", "laden", "Daten werden aus der Excel geladen …")); }
 
@@ -274,11 +276,14 @@ function seiteStart(s){
   pfad([["Start"]]);
   add(s, el("h1", null, "Hallo" + (konto && konto.name ? " " + konto.name.split(" ")[0] : "") + "!"), el("p", "lead", "Wähle einen Bereich."));
   var k = el("div", "kacheln");
-  add(k, kachel("🏠", "Liegenschaften", "Kabinenreinigung, Ausleihliste, Schlüssel und Inventar", "#/verwaltung", true),
+  add(k, kachel("🏠", "Liegenschaften", "Kabinenreinigung, Ausleihliste, Schlüssel, Inventar, Aufgaben und Bewässerung", "#/verwaltung", true),
     kachel("🎉", "Festausschuss", "Festplaner 100 Jahre Sportfreunde (2.–5. Juni 2028)", "/festplaner/", true),
     kachel("👕", "Teamwear-Status", "Bestellungen und ihr Stand: bestellt, ausgehändigt, bezahlt", "#/teamwear", true),
     kachel("📄", "Protokolle", "Ausschusssitzungen, Klausurtagungen und Generalversammlung nach Jahr und Monat", "#/protokolle", true),
-    kachel("📅", "Vereinskalender", "Termine wie Ausschusssitzungen ansehen, eintragen, ändern und löschen", "#/kalender", true));
+    kachel("📅", "Vereinskalender", "Termine wie Ausschusssitzungen ansehen, eintragen, ändern und löschen", "#/kalender", true),
+    kachel("🎪", "Veranstaltungen", "Schlachtfest, Ortsmeisterschaft, Kerb, Weihnachtsfeier: Unterlagen und Dienstpläne je Jahr", "#/veranstaltungen", true),
+    kachel("🧒", "Jugend", "Alle Jugendmannschaften mit Trainingszeiten und Links", "#/jugend", true),
+    kachel("🥅", "Aktive", "1. und 2. Mannschaft mit Trainingszeiten und Links", "#/aktive", true));
   add(s, k);
 }
 function seiteVerwaltung(s){
@@ -289,7 +294,8 @@ function seiteVerwaltung(s){
     kachel("📦", "Ausleihliste", "Buchungen anlegen, Preise, Rabatt und Zahlung", "#/verwaltung/ausleihe"),
     kachel("🔑", "Schlüssel", "Wer hat welchen Schlüssel, Schlösser", "#/verwaltung/schluessel"),
     kachel("🗂️", "Inventar", "Gegenstände, Lagerorte und Leihgebühren", "#/verwaltung/inventar"),
-    kachel("✅", "Aufgaben", "Offene Aufgaben aus Planner und der iCloud-Liste für die monatliche Ausschusssitzung", "#/verwaltung/aufgaben"));
+    kachel("✅", "Aufgaben", "Offene Aufgaben aus Planner und der iCloud-Liste für die monatliche Ausschusssitzung", "#/verwaltung/aufgaben"),
+    kachel("💧", "Bewässerungssteuerung", "Alter und neuer Sportplatz: Kamera und Bewässerung", "#/verwaltung/bewaesserung"));
   add(s, k);
   laden().then(function(D){
     if(DATEINAME) add(s, el("p", "lead", "Gelesen wird: " + DATEINAME + (SCHREIBEN_FREI ? "" : " · Eintragen ist im Portal noch gesperrt.")));
@@ -925,7 +931,7 @@ function seiteKalender(s, monatTeil){
       var d = isoZuDatum(a.iso), zeit = ev.isAllDay ? "ganztägig" : a.zeit + (e ? "–" + e.zeit : "");
       var tag = WT[d.getDay()] + ", " + pad(a.t) + "." + pad(a.mo) + ".";
       if(ev.isAllDay && e && isoPlus(a.iso, 1) !== e.iso){ var ende = isoZuDatum(isoPlus(e.iso, -1)); tag += " – " + pad(ende.getDate()) + "." + pad(ende.getMonth() + 1) + "."; }
-      var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview));
+      var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var fe = festVonTitel(ev.subject); if(fe){ var fl = el("a", "chip festlink", fe.sym + " " + fe.name + " " + a.j + " ›"); fl.href = vaLink(fe, a.j); add(tit, " ", fl); } var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview));
       var tr = el("tr"); add(tr, el("td", null, tag), el("td", null, zeit), tit, el("td", "ort", ortT),
         k.darf ? add(el("td", "z"), btn("klein", "Ändern", function(){ kalBearbeiten(ev); })) : null);
       add(tb, tr); });
@@ -1077,6 +1083,423 @@ function erinnerungenKarte(s){
     el("p", "lead", e && e.status === 404 ? "Noch kein Abgleich vorhanden (Datei „Aufgabenliste/Erinnerungen_offen.json“ fehlt)." : "Die Erinnerungen konnten nicht geladen werden: " + fehlerText(e))); });
 }
 
+/* ---------- Veranstaltungen (Team „Veranstaltungen“, nur lesen) ----------
+ * Je Fest ein Kanal-Ordner im Team, darin Ordner je Jahr (z. B. „Weihnachtsfeier 2025“ oder „2025“).
+ * Das Portal zeigt je Fest die Jahre, je Jahr runde Knöpfe für die Bereiche. Die Bereiche sind die Unterordner
+ * des Jahresordners und die Dateien, nach Namen sortiert (Dienstplan, Getränke, Essen, Tombola …).
+ * Kalendertermine mit dem Festnamen im Titel verlinken auf das Fest im passenden Jahr.
+ * Termine, deren Tag noch nicht feststeht, stehen nur hier als „Vorschlag“ (nicht im Kalender). */
+var VA = { gruppe: "Veranstaltungen" };
+var FESTE = [
+  {key: "schlachtfest", name: "Schlachtfest", sym: "🐖", ordner: /schlachtfest/i, titel: /schlachtfest/i, monat: "Februar oder März", mon: 3, alle: 1},
+  {key: "ortsmeisterschaft", name: "Ortsmeisterschaft", sym: "⚽", ordner: /ortsmeister/i, titel: /ortsmeister|(^|\W)OM(\W|$)/i, monat: "Juni", mon: 6, alle: 1},
+  {key: "biergartenfest", name: "Biergartenfest", sym: "🍻", ordner: /biergarten/i, titel: /biergarten/i, monat: "", alle: 2, ab: 2029},
+  {key: "kerb", name: "Kerb", sym: "🎡", ordner: /^kerb/i, titel: /(^|\W)kerb/i, monat: "Oktober", mon: 10, alle: 1},
+  {key: "weihnachtsfeier", name: "Weihnachtsfeier", sym: "🎄", ordner: /weihnacht/i, titel: /weihnacht/i, monat: "Dezember", mon: 12, alle: 1},
+  {key: "jubilaeum", name: "100 Jahre Sportfreunde", sym: "🎉", ordner: /jubil|julil|100\s*jahre/i, titel: /jubil|100 jahre/i, monat: "2.–5. Juni 2028", festplaner: true, ohneJahre: true}
+];
+/* Reihenfolge zählt: der erste passende Bereich nimmt die Datei. */
+var BEREICHE = [
+  {key: "dienstplan", name: "Dienstplan", sym: "🗓️", muster: /dienstplan|^dienst/i},
+  {key: "tombola", name: "Tombola", sym: "🎁", muster: /tombola|tompola/i},
+  {key: "anmeldungen", name: "Anmeldungen", sym: "📝", muster: /anmeld|mitglieder f/i},
+  {key: "genehmigungen", name: "Genehmigungen", sym: "📋", muster: /antrag|bescheid|gestattung|verkehrsanordnung|sicherheitskonzept|nutzungsmeld|jugendschutz/i},
+  {key: "rechnungen", name: "Rechnungen", sym: "🧾", muster: /rechnung|gutschrift|^sr\d|^ar\s?\d|^re-\d/i},
+  {key: "getraenke", name: "Getränke", sym: "🍺", muster: /getränk|getraenk|bierdeckel|moschd|\bbar\b/i},
+  {key: "essen", name: "Essen", sym: "🍽️", muster: /speise|essen|hähnchen|haehnchen|schlachtplatte|kuchen|kaffee|flammkuchen|kerbbacken|bedienung/i},
+  {key: "aufbau", name: "Aufbau & Zelt", sym: "⛺", muster: /zelt|garnitur|pavil|toilette|elektro|wasser|auf-?abbau/i},
+  {key: "werbung", name: "Werbung", sym: "📣", muster: /plakat|flyer|einladung|werbung/i},
+  {key: "organisation", name: "Organisation", sym: "🧭", muster: /orga|vorbereitung|ansprechpartner|turnier|bestellung|angebot|reservier|public viewing|preisliste/i},
+  {key: "rueckblick", name: "Rückblick", sym: "🔁", muster: /verbesser|optimier|feedback|verbrauch|vergleich/i},
+  {key: "bilder", name: "Bilder", sym: "📷", muster: /bild|foto|\.(jpe?g|png|heic|gif)$|^img|^whatsapp|^\d{8}_\d+/i},
+  {key: "sonstiges", name: "Sonstiges", sym: "📁", muster: /./}
+];
+function festVonTitel(t){ t = t || ""; for(var i = 0; i < FESTE.length; i++) if(FESTE[i].titel.test(t)) return FESTE[i]; return null; }
+function festVonKey(k){ for(var i = 0; i < FESTE.length; i++) if(FESTE[i].key === k) return FESTE[i]; return null; }
+function jahrAus(n){ var m = /(19|20)\d\d/.exec(n || ""); return m ? +m[0] : null; }
+function bereichVon(name){ for(var i = 0; i < BEREICHE.length; i++) if(BEREICHE[i].muster.test(name)) return BEREICHE[i]; return BEREICHE[BEREICHE.length - 1]; }
+/* „Dezember 2027 – Tag offen (Vorschlag)“, ohne bekannten Monat „2029 – Monat und Tag offen (Vorschlag)“ */
+function offenText(f, j){ return f.monat ? f.monat + " " + j + " – Tag offen (Vorschlag)" : j + " – Monat und Tag offen (Vorschlag)"; }
+function vaLink(f, jahr, ber){ return "#/veranstaltungen/" + f.key + (jahr ? "/" + jahr : "") + (ber ? "/" + encodeURIComponent(ber) : ""); }
+/* Nächste geplante Jahre ohne festen Termin: jährlich ab nächstem Jahr, sonst ab „ab“ im Abstand „alle“. */
+function geplanteJahre(f, bis){ var out = [], j = new Date().getFullYear(); if(!f.alle) return out;
+  var start = f.ab || (f.mon && new Date().getMonth() + 1 > f.mon ? j + 1 : j); for(var y = start; y <= bis; y += f.alle) if(y >= j) out.push(y); return out; }
+
+var vaCache = null;
+var VaLive = {
+  drive: function(){ if(vaCache) return Promise.resolve(vaCache);
+    return gf("/groups?$filter=" + encodeURIComponent("mailNickname eq '" + VA.gruppe + "'") + "&$select=id").then(function(r){
+      var g = r && r.value && r.value[0]; if(!g){ var e = new Error("Gruppe"); e.status = 404; throw e; }
+      return gf("/groups/" + g.id + "/drive?$select=id,webUrl"); }).then(function(d){ return vaCache = {drive: d.id, web: d.webUrl}; }); },
+  kinder: function(itemId){ return VaLive.drive().then(function(D){
+    return alle("/drives/" + D.drive + "/" + (itemId ? "items/" + itemId : "root") + "/children?$select=id,name,folder,file,webUrl,size,lastModifiedDateTime&$top=200"); }); },
+  blatt: function(itemId){ return VaLive.drive().then(function(D){ var wb = "/drives/" + D.drive + "/items/" + itemId + "/workbook";
+    return gf(wb + "/worksheets?$select=name").then(function(l){ var n = l.value[0].name;
+      return gf(wb + blattPfad(n) + "/usedRange(valuesOnly=true)?$select=address,values").then(function(b){ return {name: n, werte: b.values || []}; }); }); }); },
+  termine: function(){ var j = new Date().getFullYear(), jahre = [j - 1, j, j + 1, j + 2];
+    return KalLive.finden().then(function(){ return Promise.all(jahre.map(function(y){ return KalLive.termine(y + "-01-01T00:00:00", (y + 1) + "-01-01T00:00:00"); })); })
+      .then(function(l){ return [].concat.apply([], l); }).catch(function(){ return []; }); }
+};
+var VaTest = {
+  baum: null,
+  bauen: function(){ if(VaTest.baum) return VaTest.baum; var j = new Date().getFullYear(), n = 0;
+    function d(name, kinder){ return {id: "i" + (++n), name: name, folder: {childCount: (kinder || []).length}, webUrl: "#", kinder: kinder || []}; }
+    function f(name){ return {id: "i" + (++n), name: name, file: {}, webUrl: "#", size: 20000, lastModifiedDateTime: j + "-10-01T10:00:00Z"}; }
+    VaTest.baum = d("root", [d("General", [d("Aufgaben Veranstaltungen", [f("Aufgabe Getränkestand.xlsx")])]),
+      d("Weihnachtsfeier", [d("Weihnachtsfeier " + (j - 1), [f("Anmeldungen.xlsx"), f("Tombolapreise.docx"), f("Getränke.docx"), f("Bestellung Essen.docx"), f("Rückblick Verbesserungen.docx")]), d("Weihnachtsfeier " + j, [f("Tombola " + j + ".docx"), f("Dienstplan Weihnachtsfeier.xlsx")])]),
+      d("Schlachtfest", [d("Schlachtfest " + j, [f("Dienstplan Schlachtfest " + j + ".xlsx"), f("Plakat.pdf"), f("Rechnung Beispiel.pdf")])]),
+      d("Kerb", [d("Kerb " + j, [f("Dienstplan Kerb.xlsx"), f("Speisekarte " + j + ".docx")])])]);
+    return VaTest.baum; },
+  suchen: function(id, k){ k = k || VaTest.bauen(); if(k.id === id) return k; for(var i = 0; i < (k.kinder || []).length; i++){ var r = VaTest.suchen(id, k.kinder[i]); if(r) return r; } return null; },
+  drive: function(){ return Promise.resolve({drive: "test", web: "#"}); },
+  kinder: function(id){ var k = id ? VaTest.suchen(id) : VaTest.bauen(); return Promise.resolve((k && k.kinder) || []); },
+  blatt: function(){ return Promise.resolve({name: "Dienstplan", werte: [["Dienstplan (Beispieldaten)", "", ""], ["Zeit", "Theke", "Kasse"], ["14–16 Uhr", "Person A", "Person B"], ["16–18 Uhr", "Person C", "Person D"]]}); },
+  termine: function(){ var j = new Date().getFullYear(); return Promise.resolve([{subject: "Weihnachtsfeier", start: {dateTime: j + "-12-19T18:00:00"}, end: {dateTime: j + "-12-19T23:00:00"}, isAllDay: false}]); }
+};
+function VAQ(){ return TEST ? VaTest : VaLive; }
+function vaFehler(e){ return e && (e.status === 403 || e.status === 404) ? "Kein Zugriff auf das Team „Veranstaltungen“. Du musst Mitglied in diesem Team sein – bitte bei der Verwaltung melden." : fehlerText(e); }
+function terminText(ev){ var a = kalDatum(ev.start.dateTime); if(!a) return ""; var d = isoZuDatum(a.iso);
+  return WT[d.getDay()] + ", " + pad(a.t) + "." + pad(a.mo) + "." + a.j + (ev.isAllDay ? "" : ", " + a.zeit + " Uhr"); }
+function terminLink(ev){ var a = kalDatum(ev.start.dateTime), l = el("a", null, "📅 " + terminText(ev)); l.href = "#/kalender/" + a.j + "-" + pad(a.mo); return l; }
+
+/* Ordnerstruktur eines Fests: Jahresordner und Übriges („Allgemein“). */
+function vaFestLaden(f){
+  return VAQ().kinder(null).then(function(wurzel){
+    var o = wurzel.filter(function(x){ return x.folder && f.ordner.test(x.name); })[0];
+    if(!o) return {ordner: null, jahre: {}, allgemein: []};
+    return VAQ().kinder(o.id).then(function(k){ var jahre = {}, allgemein = [];
+      k.forEach(function(x){ var j = x.folder && !f.ohneJahre ? jahrAus(x.name) : null; if(j) jahre[j] = x; else allgemein.push(x); });
+      return {ordner: o, jahre: jahre, allgemein: allgemein}; }); });
+}
+function seiteVeranstaltungen(s, key, jahr, ber){
+  if(key) return seiteFest(s, key, jahr, ber);
+  pfad([["Start", "#/"], ["Veranstaltungen"]]);
+  s.textContent = "";
+  add(s, el("h1", null, "Veranstaltungen und Dienstpläne"), el("p", "lead", "Alle Feste des Vereins. Die Unterlagen liegen im Team „Veranstaltungen“ in Teams – je Fest und Jahr ein Ordner. Termine ohne festen Tag sind Vorschläge."));
+  var k = el("div", "kacheln"); add(s, k);
+  var hinweis = el("div"); add(s, hinweis);
+  var heute = heuteISO();
+  VAQ().termine().then(function(termine){
+    FESTE.forEach(function(f){
+      var naechster = termine.filter(function(ev){ return festVonTitel(ev.subject) === f && kalDatum(ev.start.dateTime).iso >= heute; })
+        .sort(function(a, b){ return a.start.dateTime < b.start.dateTime ? -1 : 1; })[0];
+      var text = naechster ? "Nächster Termin: " + terminText(naechster) : (f.festplaner ? f.monat : (function(){ var g = geplanteJahre(f, new Date().getFullYear() + 4)[0];
+        var dieses = new Date().getFullYear(); if(g === dieses && termine.some(function(ev){ return festVonTitel(ev.subject) === f && kalDatum(ev.start.dateTime).j === dieses; })) g = geplanteJahre(f, dieses + 4)[1];
+        return g ? "Nächstes Mal: " + offenText(f, g) : ""; })());
+      add(k, kachel(f.sym, f.name, text, vaLink(f), true));
+    });
+    return VAQ().kinder(null).then(function(wurzel){
+      var fremd = wurzel.filter(function(x){ return x.folder && !/^general$/i.test(x.name) && !FESTE.some(function(f){ return f.ordner.test(x.name); }); });
+      var gen = wurzel.filter(function(x){ return x.folder && /^general$/i.test(x.name); })[0];
+      if(gen) add(k, kachel("🗂️", "Allgemein", "Aufgabenlisten der Stände und allgemeine Unterlagen", "#/veranstaltungen/allgemein", true));
+      if(fremd.length) add(hinweis, el("div", "hinweis", "Weitere Ordner im Team, die noch keinem Fest zugeordnet sind: " + fremd.map(function(x){ return x.name; }).join(", ") + "."));
+    });
+  }).catch(function(e){ add(hinweis, el("div", "fehler", vaFehler(e))); });
+}
+function seiteFest(s, key, jahr, ber){
+  if(key === "allgemein") return seiteVaAllgemein(s, jahr);
+  var f = festVonKey(key);
+  if(!f){ pfad([["Start", "#/"], ["Veranstaltungen", "#/veranstaltungen"], ["?"]]); fehlerZeigen("Dieses Fest gibt es nicht."); return; }
+  if(jahr) return seiteFestJahr(s, f, jahr, ber);
+  pfad([["Start", "#/"], ["Veranstaltungen", "#/veranstaltungen"], [f.name]]);
+  ladeHinweis(s); seite().firstChild.textContent = "Ordner werden aus Teams geladen …";
+  Promise.all([vaFestLaden(f), VAQ().termine()]).then(function(x){
+    var D = x[0], termine = x[1].filter(function(ev){ return festVonTitel(ev.subject) === f; }), dieses = new Date().getFullYear();
+    s.textContent = "";
+    add(s, el("h1", null, f.sym + " " + f.name));
+    var lead = el("p", "lead", (f.alle === 2 ? "Alle zwei Jahre" + (f.ab ? ", nächstes Mal " + f.ab : "") : (f.alle ? "Jedes Jahr" : "Einmalig")) + (f.monat ? ", " + f.monat : "") + (f.alle ? " (Vorschlag, solange kein Termin im Kalender steht)" : "") + ". ");
+    if(D.ordner && D.ordner.webUrl){ var o = el("a", null, "Ordner in Teams öffnen"); o.href = D.ordner.webUrl; o.target = "_blank"; o.rel = "noopener"; add(lead, o); }
+    add(s, lead);
+    if(f.festplaner){ var fp = el("a", "btn primary", "Zum Festplaner 2028"); fp.href = "/festplaner/"; add(s, add(el("div", "reihe"), fp)); }
+    if(!D.ordner) add(s, el("div", "hinweis", "Im Team „Veranstaltungen“ gibt es für dieses Fest noch keinen Kanal bzw. Ordner. Anlegen in Teams: Team „Veranstaltungen“ › „+“ Kanal „" + f.name + "“."));
+    var jahre = Object.keys(D.jahre).map(Number);
+    termine.forEach(function(ev){ var j = kalDatum(ev.start.dateTime).j; if(jahre.indexOf(j) < 0) jahre.push(j); });
+    geplanteJahre(f, dieses + 2).forEach(function(j){ if(jahre.indexOf(j) < 0) jahre.push(j); });
+    jahre.sort(function(a, b){ return b - a; });
+    if(!jahre.length){ if(D.allgemein.length) add(s, el("h2", null, "Unterlagen"), dateiListe(D.allgemein)); return; }
+    var t = el("table", "tabelle"), tb = el("tbody");
+    add(t, add(el("thead"), add(el("tr"), el("th", null, "Jahr"), el("th", null, "Termin"), el("th", null, "Unterlagen"))), tb);
+    jahre.forEach(function(j){
+      var evs = termine.filter(function(ev){ return kalDatum(ev.start.dateTime).j === j; }), ord = D.jahre[j];
+      var tdT = el("td"); if(evs.length) evs.forEach(function(ev, i){ if(i) add(tdT, el("br")); add(tdT, terminLink(ev)); });
+      else add(tdT, el("span", "grau", geplanteJahre(f, j).indexOf(j) > -1 ? offenText(f, j) : "nicht im Kalender"));
+      var a = el("a", null, String(j)); a.href = vaLink(f, j);
+      add(tb, add(el("tr"), add(el("td"), add(el("b"), a)), tdT, el("td", ord ? null : "grau", ord ? ((ord.folder && ord.folder.childCount) || 0) + " Einträge" : "noch kein Ordner"))); });
+    add(s, add(el("div", "scroll"), t));
+    if(D.allgemein.length){ add(s, el("h2", null, "Allgemein (für alle Jahre)")); add(s, dateiListe(D.allgemein)); }
+  }).catch(function(e){ fehlerZeigen(vaFehler(e)); });
+}
+function dateiListe(liste){
+  var t = el("table", "tabelle"), tb = el("tbody");
+  add(t, add(el("thead"), add(el("tr"), el("th", null, "Datei"), el("th", null, "Geändert"))), tb);
+  liste.slice().sort(function(a, b){ return (b.folder ? 1 : 0) - (a.folder ? 1 : 0) || a.name.localeCompare(b.name, "de"); }).forEach(function(x){
+    var a = el("a", "doc", (x.folder ? "📁 " : dateiSym(x.name)) + x.name); a.href = x.webUrl || "#"; a.target = "_blank"; a.rel = "noopener";
+    add(tb, add(el("tr"), add(el("td"), a), el("td", "grau", x.lastModifiedDateTime ? auDatum(x.lastModifiedDateTime) : ""))); });
+  if(!liste.length) add(tb, add(el("tr", "leer"), el("td", null, "Keine Dateien."), el("td")));
+  return add(el("div", "scroll"), t);
+}
+function dateiSym(n){ return /\.xlsx?$|\.ods$/i.test(n) ? "📊 " : (/\.docx?$|\.odt$/i.test(n) ? "📄 " : (/\.pdf$/i.test(n) ? "📕 " : (/\.(jpe?g|png|heic|gif)$/i.test(n) ? "🖼️ " : "📎 "))); }
+function seiteFestJahr(s, f, jahr, ber){
+  jahr = +jahr; ber = ber ? decodeURIComponent(ber) : "";
+  pfad([["Start", "#/"], ["Veranstaltungen", "#/veranstaltungen"], [f.name, vaLink(f)], [String(jahr)]]);
+  ladeHinweis(s); seite().firstChild.textContent = "Ordner werden aus Teams geladen …";
+  Promise.all([vaFestLaden(f), VAQ().termine()]).then(function(x){
+    var D = x[0], evs = x[1].filter(function(ev){ return festVonTitel(ev.subject) === f && kalDatum(ev.start.dateTime).j === jahr; }), ord = D.jahre[jahr];
+    return (ord ? VAQ().kinder(ord.id) : Promise.resolve([])).then(function(inhalt){
+      s.textContent = "";
+      add(s, el("h1", null, f.sym + " " + f.name + " " + jahr));
+      var lead = el("p", "lead");
+      if(evs.length) evs.forEach(function(ev){ add(lead, terminLink(ev), " "); });
+      else add(lead, geplanteJahre(f, jahr).indexOf(jahr) > -1 ? offenText(f, jahr) + ". " : "Kein Termin im Vereinskalender. ");
+      if(ord && ord.webUrl){ var o = el("a", null, "Ordner in Teams öffnen"); o.href = ord.webUrl; o.target = "_blank"; o.rel = "noopener"; add(lead, " · ", o); }
+      add(s, lead);
+      if(!ord){ add(s, el("div", "hinweis", "Für " + jahr + " gibt es im Team „Veranstaltungen“ noch keinen Ordner. Anlegen in Teams im Kanal „" + (D.ordner ? D.ordner.name : f.name) + "“: Ordner „" + f.name + " " + jahr + "“.")); return; }
+      /* Bereiche: Unterordner als eigene Knöpfe, Dateien nach Namen sortiert */
+      var gruppen = {}, reihenfolge = [];
+      function rein(k, name, sym, it){ if(!gruppen[k]){ gruppen[k] = {key: k, name: name, sym: sym, dateien: [], ordner: null}; reihenfolge.push(k); } if(it) gruppen[k].dateien.push(it); return gruppen[k]; }
+      BEREICHE.forEach(function(b){ if(b.key === "dienstplan" || b.key === "getraenke" || b.key === "essen" || b.key === "tombola") rein(b.key, b.name, b.sym); });
+      inhalt.forEach(function(it){
+        if(it.folder){ var b = bereichVon(it.name), g = rein("ordner:" + it.name, it.name, b.key === "sonstiges" ? "📁" : b.sym); g.ordner = it; return; }
+        var b2 = bereichVon(it.name); rein(b2.key, b2.name, b2.sym, it); });
+      var knoepfe = el("div", "bereiche");
+      reihenfolge.forEach(function(k){ var g = gruppen[k], n = g.ordner ? ((g.ordner.folder && g.ordner.folder.childCount) || 0) : g.dateien.length;
+        var a = el("a", "bereich" + (ber === k ? " an" : "") + (n ? "" : " leer")); a.href = vaLink(f, jahr, k);
+        add(a, add(el("span", "rund"), g.sym, n ? el("span", "zahl", String(n)) : null), el("span", "name", g.name)); add(knoepfe, a); });
+      add(s, knoepfe);
+      var box = el("div"); add(s, box);
+      if(!ber){ add(box, el("p", "lead", "Wähle einen Bereich.")); return; }
+      var g = gruppen[ber]; if(!g){ add(box, el("p", "lead", "Diesen Bereich gibt es in " + jahr + " nicht.")); return; }
+      var karte = el("div", "karte"); add(box, karte); add(karte, el("h2", null, g.sym + " " + g.name));
+      if(g.ordner){ var lo = el("a", null, "Ordner in Teams öffnen"); lo.href = g.ordner.webUrl; lo.target = "_blank"; lo.rel = "noopener"; add(karte, add(el("p", "lead"), lo));
+        var platz = el("div", "laden", "Wird geladen …"); add(karte, platz);
+        VAQ().kinder(g.ordner.id).then(function(l){ platz.replaceWith(dateiListe(l)); }).catch(function(e){ platz.replaceWith(el("div", "fehler", vaFehler(e))); }); return; }
+      if(!g.dateien.length){ add(karte, el("p", "lead", "Noch keine Unterlagen für " + g.name + " " + jahr + ". Dateien dafür im Jahresordner in Teams ablegen; der Name entscheidet über den Bereich (z. B. „Dienstplan …“, „Getränke …“, „Tombola …“).")); return; }
+      add(karte, dateiListe(g.dateien));
+      if(ber === "dienstplan") g.dateien.filter(function(d){ return /\.xlsx$/i.test(d.name); }).forEach(function(d){
+        var platz2 = el("div", "laden", "Dienstplan „" + d.name + "“ wird geladen …"); add(karte, platz2);
+        VAQ().blatt(d.id).then(function(b){ var c = el("div"); add(c, el("h2", null, d.name + " · Blatt „" + b.name + "“"), tabelleAus(b.werte)); platz2.replaceWith(c); })
+          .catch(function(){ platz2.replaceWith(el("p", "grau", "„" + d.name + "“ ließ sich nicht als Tabelle anzeigen – bitte in Excel öffnen.")); }); });
+    });
+  }).catch(function(e){ fehlerZeigen(vaFehler(e)); });
+}
+function tabelleAus(werte){
+  var zeilen = werte.filter(function(r){ return r.some(function(v){ return !leer(v); }); }).slice(0, 300);
+  var breite = zeilen.reduce(function(m, r){ var l = r.length; while(l && leer(r[l - 1])) l--; return Math.max(m, l); }, 0);
+  var t = el("table", "tabelle"), tb = el("tbody"); add(t, tb);
+  zeilen.forEach(function(r){ var tr = el("tr"); for(var i = 0; i < breite; i++){ var v = r[i]; add(tr, el("td", null, typeof v === "number" && v > 40000 && v < 60000 ? datumText(v) : (typeof v === "number" && v > 0 && v < 1 ? zeitText(v) : txt(v)))); } add(tb, tr); });
+  return add(el("div", "scroll"), t);
+}
+function zeitText(v){ var m = Math.round(v * 1440); return pad(Math.floor(m / 60)) + ":" + pad(m % 60); }
+function seiteVaAllgemein(s){
+  pfad([["Start", "#/"], ["Veranstaltungen", "#/veranstaltungen"], ["Allgemein"]]);
+  ladeHinweis(s);
+  VAQ().kinder(null).then(function(w){ var gen = w.filter(function(x){ return x.folder && /^general$/i.test(x.name); })[0];
+    return gen ? VAQ().kinder(gen.id).then(function(l){ return {gen: gen, l: l}; }) : {gen: null, l: []}; }).then(function(D){
+    s.textContent = ""; add(s, el("h1", null, "🗂️ Allgemein"), el("p", "lead", "Kanal „General“ im Team „Veranstaltungen“: Aufgabenlisten der Stände und allgemeine Unterlagen."));
+    add(s, dateiListe(D.l));
+  }).catch(function(e){ fehlerZeigen(vaFehler(e)); });
+}
+
+/* ---------- Jugend und Aktive ----------
+ * Stand: Homepage 1928schneeberg.de (gelesen am 24.11.2026). Hier stehen bewusst keine Namen –
+ * Trainer, Betreuer und Kontakte stehen auf der Homepage (Link je Mannschaft). */
+var MANNSCHAFTEN = {
+  aktive: {titel: "Aktive", sym: "🥅", lead: "Herrenmannschaften, Saison 2026/2027.", gruppen: [
+    {name: "1. & 2. Mannschaft", link: "https://1928schneeberg.de/1-2-mannschaft/", teams: [
+      {name: "1. Mannschaft", info: "A-Klasse"}, {name: "2. Mannschaft", info: "B-Klasse"}],
+      training: ["Dienstag 19:00–20:45 Uhr", "Freitag 18:30–20:15 Uhr (anschließend Spielersitzung)"], ort: "Ort auf der Homepage nicht angegeben"}]},
+  jugend: {titel: "Jugend", sym: "🧒", lead: "Alle Jugendmannschaften mit Trainingszeiten.", gruppen: [
+    {name: "Großfeld", link: "https://1928schneeberg.de/jugend-grossfeld/", teams: [
+      {name: "A-Jugend", info: "U19", training: ["Montag 19:00–20:30 Uhr (Amorbach)", "Mittwoch 19:00–20:30 Uhr (Amorbach)"]},
+      {name: "B-Jugend", info: "U17", training: ["Montag 18:00–19:30 Uhr (Kirchzell)", "Mittwoch 18:00–19:30 Uhr (Kirchzell)"]},
+      {name: "C-Jugend", info: "U15", training: ["Dienstag 18:00–19:30 Uhr (Amorbach)", "Donnerstag 18:00–19:30 Uhr (Schneeberg)"]},
+      {name: "D-Jugend", info: "U13", training: ["Dienstag 17:30–19:00 Uhr (Schneeberg)", "Donnerstag 17:30–19:00 Uhr (Amorbach)"]}]},
+    {name: "Kleinfeld", link: "https://1928schneeberg.de/jugend-kleinfeld/", teams: [
+      {name: "E-Jugend", info: "U11", training: ["Montag 17:00–18:30 Uhr (Schneeberg)", "Mittwoch 17:00–18:30 Uhr (Schneeberg)"]},
+      {name: "F-Jugend", info: "U9", training: ["Dienstag 17:00–18:30 Uhr (Schneeberg)", "Donnerstag 17:00–18:30 Uhr (Schneeberg)"]},
+      {name: "Bambini", info: "", training: ["Donnerstag 16:45–18:00 Uhr (Schneeberg)"]}]},
+    {name: "Mädchen", link: "https://1928schneeberg.de/maedchenmannschaft/", teams: [
+      {name: "Mädchenmannschaft", info: "12 bis 18 Jahre", training: ["Mittwoch 19:00–20:15 Uhr (Sportplatz Schneeberg)"]}]}]}
+};
+function seiteMannschaften(s, art){
+  var M = MANNSCHAFTEN[art];
+  pfad([["Start", "#/"], [M.titel]]);
+  s.textContent = "";
+  add(s, el("h1", null, M.sym + " " + M.titel), el("p", "lead", M.lead + " Stand laut Homepage (gelesen am 24.11.2026). Trainer, Betreuer und Kontakte stehen auf der Homepage."));
+  M.gruppen.forEach(function(g){
+    var k = el("div", "karte"); add(s, k);
+    var hl = el("a", null, "Seite auf der Homepage"); hl.href = g.link; hl.target = "_blank"; hl.rel = "noopener";
+    add(k, el("h2", null, g.name), add(el("p", "lead"), hl));
+    var t = el("table", "tabelle"), tb = el("tbody");
+    add(t, add(el("thead"), add(el("tr"), el("th", null, "Mannschaft"), el("th", null, "Klasse/Alter"), el("th", null, "Training"))), tb);
+    g.teams.forEach(function(m){ var tr = (m.training || g.training || []).concat(m.training ? [] : (g.ort ? [g.ort] : []));
+      var td = el("td"); tr.forEach(function(z, i){ if(i) add(td, el("br")); add(td, z); });
+      add(tb, add(el("tr"), add(el("td"), el("b", null, m.name)), el("td", null, m.info || "–"), td)); });
+    add(k, add(el("div", "scroll"), t));
+  });
+  var l = el("a", null, "1928schneeberg.de"); l.href = "https://1928schneeberg.de/"; l.target = "_blank"; l.rel = "noopener";
+  add(s, add(el("p", "grau"), "Ergebnisse und Tabellen: ", l));
+}
+
+/* ---------- Bewässerungssteuerung (aus der iPhone-App übernommen) ----------
+ * Blätter der Liegenschaften-Excel: „Kameras“, „Bewässerung“, „Bewässerung Regner“, „Bewässerung Programme“.
+ * Geschaltet wird per HTTP an den Raspberry Pi: POST <Basis-URL><Ein-Pfad>?dauer=<Sekunden>, POST <Basis-URL><Aus-Pfad>,
+ * GET <Basis-URL>/druck. Es läuft immer nur ein Regner; nach dem Ausschalten 10 s Sperre. Jedes Einschalten
+ * schickt eine Maximaldauer mit. Programme laufen im Browser nur, solange die Seite offen ist.
+ * Solange keine Basis-URL eingetragen ist, ist die Steuerung sichtbar, aber ausgegraut. */
+var ANLAGEN = {alt: "Alter Sportplatz", neu: "Neuer Sportplatz"};
+var BW_SPERRE = 10;
+var BW_PROGRAMME_VORGABE = [ /* laut Anleitung, solange das Blatt „Bewässerung Programme“ leer ist */
+  {kennung: "A", name: "Langes Programm", dauern: [90, 90, 60, 60, 60, 60, 60, 75, 75]},
+  {kennung: "B", name: "Testlauf", dauern: [1, 1, 1, 1, 1, 1, 1, 1, 1]},
+  {kennung: "C", name: "Tau-Programm", dauern: [5, 5, 5, 5, 5, 5, 5, 5, 5]},
+  {kennung: "D", name: "30 Minuten je Regner", dauern: [30, 30, 30, 30, 30, 30, 30, 30, 30]}];
+var BW = {lauf: null, sperreBis: 0, programm: null, meldung: "", fehler: "", druck: null, takt: null};
+function bwBlatt(n){ return Q().blatt(n).catch(function(){ return []; }); }
+function bwLaden(){
+  return Promise.all(["Kameras", "Bewässerung", "Bewässerung Regner", "Bewässerung Programme"].map(bwBlatt)).then(function(b){
+    var kameras = [], anlagen = [], regner = [], prog = {};
+    for(var z = ERSTE; z <= b[0].length; z++){ var n = txt(zelle(b[0], z, 1)); if(n) kameras.push({name: n, anlage: txt(zelle(b[0], z, 2)), url: txt(zelle(b[0], z, 5)), typ: txt(zelle(b[0], z, 6)).toUpperCase() || "HLS", bem: txt(zelle(b[0], z, 8))}); }
+    for(z = ERSTE; z <= b[1].length; z++){ var a = txt(zelle(b[1], z, 1)); if(a) anlagen.push({anlage: a, basis: txt(zelle(b[1], z, 2)), kamera: txt(zelle(b[1], z, 5)), modi: /^ja/i.test(txt(zelle(b[1], z, 6))), bem: txt(zelle(b[1], z, 7)), soll: zahl(zelle(b[1], z, 8))}); }
+    for(z = ERSTE; z <= b[2].length; z++){ var r = txt(zelle(b[2], z, 2)); if(r) regner.push({anlage: txt(zelle(b[2], z, 1)), name: r, ein: txt(zelle(b[2], z, 3)), aus: txt(zelle(b[2], z, 4)), folge: zahl(zelle(b[2], z, 5)), dauer: zahl(zelle(b[2], z, 6)), soll: zahl(zelle(b[2], z, 8))}); }
+    for(z = ERSTE; z <= b[3].length; z++){ var k = txt(zelle(b[3], z, 2)), an = txt(zelle(b[3], z, 1)); if(!k) continue; var id = an + "|" + k;
+      (prog[id] = prog[id] || {anlage: an, kennung: k, name: txt(zelle(b[3], z, 3)), schritte: []}).schritte.push({regner: txt(zelle(b[3], z, 4)), dauer: zahl(zelle(b[3], z, 5)) || 0}); }
+    /* Vorgaben wie in der App, falls Blätter fehlen */
+    if(!kameras.length) kameras = [{name: "Kamera Alter Sportplatz Nord", anlage: ANLAGEN.alt, url: "", typ: "HLS"}, {name: "Kamera Alter Sportplatz Süd", anlage: ANLAGEN.alt, url: "", typ: "HLS"},
+      {name: "Kamera Neuer Sportplatz Nord", anlage: ANLAGEN.neu, url: "", typ: "HLS"}, {name: "Kamera Neuer Sportplatz Süd", anlage: ANLAGEN.neu, url: "", typ: "HLS"}];
+    if(!anlagen.length) anlagen = [{anlage: ANLAGEN.alt, basis: "", kamera: "Kamera Alter Sportplatz Süd", modi: false, bem: "Ein Ventil, nur ein und aus", soll: 7.5},
+      {anlage: ANLAGEN.neu, basis: "", kamera: "Kamera Neuer Sportplatz Nord", modi: true, bem: "Mehrere Regner, Reihenfolge und Dauer", soll: 8}];
+    if(!regner.length){ regner.push({anlage: ANLAGEN.alt, name: "Beregnung gesamt", ein: "/ventil/1/ein", aus: "/ventil/1/aus", folge: 1, dauer: 20, soll: 7.5});
+      for(var i = 1; i <= 9; i++) regner.push({anlage: ANLAGEN.neu, name: "Regner " + i, ein: "/ventil/" + i + "/ein", aus: "/ventil/" + i + "/aus", folge: i, dauer: 15, soll: i <= 3 ? 9 : 8}); }
+    var programme = Object.keys(prog).map(function(k){ return prog[k]; }), vorgabe = false;
+    if(!programme.some(function(p){ return p.anlage === ANLAGEN.neu; })){ vorgabe = true;
+      BW_PROGRAMME_VORGABE.forEach(function(p){ programme.push({anlage: ANLAGEN.neu, kennung: p.kennung, name: p.name, schritte: p.dauern.map(function(d, i){ return {regner: "Regner " + (i + 1), dauer: d}; })}); }); }
+    regner.sort(function(a, b){ return (a.folge || 99) - (b.folge || 99); });
+    if(TEST && /[?&]pi\b/.test(location.search)) anlagen.forEach(function(a){ a.basis = "https://pi.test"; }); /* Testmodus: Attrappe der Steuerung */
+    return {kameras: kameras, anlagen: anlagen, regner: regner, programme: programme, vorgabe: vorgabe};
+  });
+}
+function bwUrl(an, pfadR, dauerMin){ if(!an.basis || !pfadR) return null; var u = an.basis.replace(/\/$/, "") + (pfadR.charAt(0) === "/" ? "" : "/") + pfadR;
+  if(dauerMin > 0) u += (u.indexOf("?") < 0 ? "?" : "&") + "dauer=" + Math.round(dauerMin * 60); return u; }
+function bwSenden(u, methode, rumpf){
+  if(TEST && u.indexOf("https://pi.test") === 0){ (window.__pi = window.__pi || []).push((methode || "POST") + " " + u.slice(15)); return Promise.resolve({ok: true}); }
+  return fetch(u, {method: methode || "POST", headers: rumpf ? {"Content-Type": "application/json"} : undefined, body: rumpf ? JSON.stringify(rumpf) : undefined})
+    .then(function(r){ if(!r.ok) throw new Error("Die Steuerung hat mit Fehler " + r.status + " geantwortet."); return r; })
+    .catch(function(e){ throw new Error(e && /Fehler \d/.test(e.message) ? e.message : "Die Steuerung ist nicht erreichbar."); });
+}
+function bwEin(an, r, dauer){
+  if(BW.lauf) return Promise.reject(new Error("Es kann nur ein Regner laufen. Erst „" + BW.lauf.name + "“ ausschalten."));
+  var rest = Math.ceil((BW.sperreBis - Date.now()) / 1000); if(rest > 0) return Promise.reject(new Error("Bitte noch " + rest + " s warten, dann darf der nächste Regner starten."));
+  var u = bwUrl(an, r.ein, dauer); if(!u) return Promise.reject(new Error("Für „" + r.name + "“ ist kein Ein-Pfad hinterlegt."));
+  return bwSenden(u).then(function(){ BW.lauf = {name: r.name, bis: Date.now() + dauer * 60000}; BW.meldung = r.name + " eingeschaltet (" + dauer + " min)."; });
+}
+function bwAus(an, r){
+  var u = bwUrl(an, r.aus); if(!u) return Promise.reject(new Error("Für „" + r.name + "“ ist kein Aus-Pfad hinterlegt."));
+  return bwSenden(u).then(function(){ if(BW.lauf && BW.lauf.name === r.name){ BW.lauf = null; BW.sperreBis = Date.now() + BW_SPERRE * 1000; } BW.meldung = r.name + " ausgeschaltet."; });
+}
+function bwAllesAus(an, liste){ if(BW.programm) BW.programm.stop = true; BW.programm = null;
+  return liste.reduce(function(p, r){ return p.then(function(){ return r.aus ? bwAus(an, r).catch(function(){}) : null; }); }, Promise.resolve())
+    .then(function(){ BW.lauf = null; BW.meldung = "Alles ausgeschaltet."; }); }
+function bwWarte(ms, P){ return new Promise(function(ok){ var t0 = Date.now(); (function w(){ if(P.stop || Date.now() - t0 >= ms) ok(); else setTimeout(w, 500); })(); }); }
+function bwProgramm(an, prog, liste, neuZeichnen){
+  if(BW.programm || BW.lauf){ BW.fehler = "Es läuft schon etwas – erst ausschalten."; neuZeichnen(); return; }
+  var P = BW.programm = {kennung: prog.kennung, name: prog.name, schritt: 0, stop: false};
+  prog.schritte.reduce(function(kette, st, i){ return kette.then(function(){ if(P.stop) return;
+    var r = liste.filter(function(x){ return x.name === st.regner; })[0]; if(!r || !st.dauer) return;
+    P.schritt = i; neuZeichnen();
+    return bwEin(an, r, st.dauer).then(function(){ neuZeichnen(); return bwWarte(st.dauer * 60000, P); })
+      .then(function(){ if(!P.stop) return bwAus(an, r); }).then(function(){ neuZeichnen(); return bwWarte(BW_SPERRE * 1000, P); }); }); }, Promise.resolve())
+    .catch(function(e){ BW.fehler = e.message; })
+    .then(function(){ if(BW.programm === P) BW.programm = null; if(!P.stop) BW.meldung = "Programm " + prog.kennung + " beendet."; neuZeichnen(); });
+}
+function seiteBewaesserung(s, platz){
+  if(!platz){
+    pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Bewässerungssteuerung"]]);
+    s.textContent = "";
+    add(s, el("h1", null, "💧 Bewässerungssteuerung"), el("p", "lead", "Sportplatz wählen: links das Kamerabild, rechts die Bewässerung."));
+    add(s, add(el("div", "kacheln"), kachel("🌱", "Alter Sportplatz", "Ein Ventil: Bewässerung ein und aus", "#/verwaltung/bewaesserung/alt", true),
+      kachel("🌿", "Neuer Sportplatz", "Neun Regner, einzeln oder als Programm nacheinander (z. B. Tau-Programm 5 min, langes Programm bis 90 min)", "#/verwaltung/bewaesserung/neu", true)));
+    return;
+  }
+  var name = ANLAGEN[platz]; if(!name){ fehlerZeigen("Diesen Sportplatz gibt es nicht."); return; }
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Bewässerungssteuerung", "#/verwaltung/bewaesserung"], [name]]);
+  ladeHinweis(s);
+  bwLaden().then(function(D){
+    var an = D.anlagen.filter(function(a){ return a.anlage === name; })[0] || {anlage: name, basis: ""};
+    var liste = D.regner.filter(function(r){ return r.anlage === name; }), progs = D.programme.filter(function(p){ return p.anlage === name; });
+    var kams = D.kameras.filter(function(k){ return k.anlage === name; });
+    var kam = kams.filter(function(k){ return k.name === an.kamera; })[0] || kams[0];
+    var darfSchalten = darf("verwaltung"), verbunden = !!an.basis, httpsProblem = /^http:/i.test(an.basis) && location.protocol === "https:";
+    s.textContent = "";
+    add(s, el("h1", null, "💧 " + name), el("p", "lead", an.bem || ""));
+    var raster = el("div", "bw"), links = el("div", "karte bw-kamera"), rechts = el("div", "karte bw-steuerung");
+    add(s, add(raster, links, rechts));
+    /* Kamera */
+    function kameraZeigen(){ links.textContent = ""; add(links, el("h2", null, "📹 Kamera"));
+      if(kams.length > 1){ var w = el("select"); kams.forEach(function(k){ var o = el("option", null, k.name); o.value = k.name; add(w, o); }); w.value = kam ? kam.name : "";
+        w.addEventListener("change", function(){ kam = kams.filter(function(k){ return k.name === w.value; })[0]; kameraZeigen(); }); add(links, w); }
+      var bild = el("div", "bw-bild"); add(links, bild);
+      if(!kam || !kam.url){ add(bild, el("span", null, "Noch keine Kamera eingetragen. Sobald sie hängt: Adresse in der Liegenschaften-Excel, Blatt „Kameras“, Spalte F (Stream-URL), Spalte G Typ HLS, MJPEG oder Web.")); return; }
+      if(/^http:/i.test(kam.url) && location.protocol === "https:"){ add(bild, el("span", null, "Die Kamera-Adresse beginnt mit http://. Das Portal läuft über https und der Browser blockiert sie – die Kamera braucht eine https-Adresse.")); return; }
+      if(kam.typ === "MJPEG"){ var img = el("img"); img.alt = kam.name; img.src = kam.url; add(bild, img); }
+      else if(kam.typ === "WEB"){ var fr = el("iframe"); fr.src = kam.url; fr.title = kam.name; add(bild, fr); }
+      else { var v = el("video"); v.controls = true; v.muted = true; v.autoplay = true; v.playsInline = true;
+        if(v.canPlayType("application/vnd.apple.mpegurl")) { v.src = kam.url; add(bild, v); }
+        else add(bild, el("span", null, "Dieser Browser spielt den HLS-Stream nicht direkt ab (Safari auf iPhone und Mac kann es). Über „Groß öffnen“ geht es in einem eigenen Fenster.")); }
+      var offen = el("a", "btn klein", "Groß öffnen"); offen.href = kam.url; offen.target = "_blank"; offen.rel = "noopener"; add(links, add(el("div", "reihe"), offen)); }
+    kameraZeigen();
+    /* Steuerung */
+    var statusBox = null;
+    function statusFuellen(){ var status = statusBox; if(!status || !status.isConnected) return; status.textContent = "";
+      var rest = BW.lauf ? Math.max(0, Math.round((BW.lauf.bis - Date.now()) / 1000)) : 0, sperre = Math.ceil((BW.sperreBis - Date.now()) / 1000);
+      add(status, add(el("span"), "Läuft: ", el("b", null, BW.lauf ? BW.lauf.name + " · noch " + Math.floor(rest / 60) + ":" + pad(rest % 60) : "nichts")));
+      if(BW.programm) add(status, add(el("span"), "Programm: ", el("b", null, BW.programm.kennung + " „" + BW.programm.name + "“, Schritt " + (BW.programm.schritt + 1))));
+      if(sperre > 0) add(status, add(el("span"), "Sperre: ", el("b", null, sperre + " s")));
+      add(status, add(el("span"), "Druck: ", el("b", null, BW.druck != null ? String(BW.druck).replace(".", ",") + " bar" : "–"), an.soll ? " (Soll " + String(an.soll).replace(".", ",") + " bar)" : ""));
+    }
+    function zeichnen(){
+      if(!rechts.isConnected) return;
+      rechts.textContent = ""; add(rechts, el("h2", null, "🚿 Bewässerung"));
+      if(!verbunden) add(rechts, el("div", "hinweis", "Noch keine Steuerung verbunden. Sobald der Raspberry Pi steht: Basis-URL in der Excel, Blatt „Bewässerung“, Spalte C. Bis dahin sind die Knöpfe ausgegraut."));
+      if(httpsProblem) add(rechts, el("div", "fehler", "Die Basis-URL beginnt mit http://. Von der https-Seite des Portals blockiert der Browser das – die Steuerung braucht eine https-Adresse (z. B. über Tailscale)."));
+      if(!darfSchalten) add(rechts, el("div", "hinweis", "Du kannst hier nur ansehen. Schalten kann nur die Verwaltung."));
+      var aus = !verbunden || httpsProblem || !darfSchalten;
+      var status = el("div", "summe"); statusBox = status; add(rechts, status); statusFuellen();
+      if(BW.fehler) add(rechts, el("div", "fehler", BW.fehler));
+      if(BW.meldung) add(rechts, el("p", "grau", BW.meldung));
+      function tu(p){ BW.fehler = ""; p.catch(function(e){ BW.fehler = e.message; }).then(zeichnen); }
+      var t = el("table", "tabelle"), tb = el("tbody");
+      add(t, add(el("thead"), add(el("tr"), el("th", null, "Regner"), el("th", null, "Dauer"), el("th", null, ""))), tb);
+      liste.forEach(function(r){
+        var d = el("select"); [1, 5, 10, 15, 20, 30, 45, 60, 75, 90].concat(r.dauer && [1, 5, 10, 15, 20, 30, 45, 60, 75, 90].indexOf(r.dauer) < 0 ? [r.dauer] : []).sort(function(a, b){ return a - b; })
+          .forEach(function(m){ var o = el("option", null, m + " min"); o.value = m; add(d, o); }); d.value = r.dauer || 15; d.disabled = aus;
+        var laeuft = BW.lauf && BW.lauf.name === r.name;
+        var bEin = btn("primary klein", "Ein", function(){ tu(bwEin(an, r, +d.value)); }), bAus = btn("klein", "Aus", function(){ tu(bwAus(an, r)); });
+        bEin.disabled = aus || !!BW.lauf || !!BW.programm; bAus.disabled = aus;
+        add(tb, add(el("tr", laeuft ? "laeuft" : null), add(el("td"), el("b", null, r.name), laeuft ? el("span", "chip ok", " läuft ") : null, r.soll ? el("div", "grau", "Solldruck " + String(r.soll).replace(".", ",") + " bar") : null), add(el("td"), d), add(el("td", "z"), bEin, " ", bAus))); });
+      add(rechts, add(el("div", "scroll"), t));
+      if(an.modi || progs.length){
+        add(rechts, el("h2", null, "Programme"), el("p", "grau", "Ein Regner nach dem anderen, dazwischen " + BW_SPERRE + " s Pause. Das Programm läuft nur, solange diese Seite offen ist." + (D.vorgabe ? " Dauern laut Anleitung (Blatt „Bewässerung Programme“ ist noch leer)." : "")));
+        var pt = el("table", "tabelle"), pb = el("tbody"); add(pt, add(el("thead"), add(el("tr"), el("th", null, "Programm"), el("th", null, "Ablauf"), el("th", null, ""))), pb);
+        progs.forEach(function(p){ var ges = p.schritte.reduce(function(a, x){ return a + x.dauer; }, 0), fehlt = p.schritte.filter(function(x){ return !liste.some(function(r){ return r.name === x.regner; }); }).length;
+          var ablauf = p.schritte.map(function(x){ return x.regner.replace("Regner ", "R") + " " + x.dauer; }).join(" · ") + " min";
+          var b = btn("klein", "Starten", function(){ BW.fehler = ""; bwProgramm(an, p, liste, zeichnen); zeichnen(); }); b.disabled = aus || !!BW.programm || !!BW.lauf;
+          add(pb, add(el("tr", BW.programm && BW.programm.kennung === p.kennung ? "laeuft" : null), add(el("td"), el("b", null, p.kennung + " · " + p.name), el("div", "grau", "gesamt " + Math.floor(ges / 60) + " h " + (ges % 60) + " min")),
+            add(el("td"), ablauf, fehlt ? el("div", "grau", fehlt + " Regner nicht in der Excel – werden übersprungen") : null), add(el("td", "z"), b))); });
+        add(rechts, add(el("div", "scroll"), pt));
+      }
+      var notaus = btn("gefahr", "Alles ausschalten", function(){ tu(bwAllesAus(an, liste)); }); notaus.disabled = !verbunden || httpsProblem || !darfSchalten;
+      add(rechts, add(el("div", "reihe"), notaus));
+    }
+    zeichnen();
+    clearInterval(BW.takt); var zaehler = 0, vorher = !!BW.lauf;
+    BW.takt = setInterval(function(){ if(!rechts.isConnected){ clearInterval(BW.takt); return; }
+      if(BW.lauf && BW.lauf.bis <= Date.now()){ BW.lauf = null; BW.sperreBis = Date.now() + BW_SPERRE * 1000; }
+      if(verbunden && !httpsProblem && zaehler++ % 10 === 0) fetch(bwUrl(an, "/druck")).then(function(r){ return r.ok ? r.text() : null; }).then(function(t){ var v = null; try{ var j = JSON.parse(t); v = typeof j === "number" ? j : j.bar; }catch(_){ v = parseFloat(t); } BW.druck = isNaN(v) ? null : v; }).catch(function(){ BW.druck = null; });
+      if(vorher && !BW.lauf) zeichnen(); else statusFuellen(); vorher = !!BW.lauf; }, 1000);
+  }).catch(function(e){ fehlerZeigen(fehlerText(e)); });
+}
+
 /* ---------- Ablauf ---------- */
 function route(){
   /* Im Anmelde-Popup trägt die Adresse den Antwortcode von Microsoft: dort nichts anzeigen. */
@@ -1087,12 +1510,15 @@ function route(){
   if(teile[0] === "teamwear"){ seiteTeamwear(s); }
   else if(teile[0] === "protokolle"){ seiteProtokolle(s, teile[1]); }
   else if(teile[0] === "kalender"){ seiteKalender(s, teile[1]); }
+  else if(teile[0] === "veranstaltungen"){ seiteVeranstaltungen(s, teile[1], teile[2], teile[3]); }
+  else if(teile[0] === "jugend" || teile[0] === "aktive"){ seiteMannschaften(s, teile[0]); }
   else if(teile[0] !== "verwaltung"){ seiteStart(s); }
   else if(teile[1] === "reinigung") seiteReinigung(s);
   else if(teile[1] === "ausleihe") seiteAusleihe(s, teile[2]);
   else if(teile[1] === "schluessel") seiteSchluessel(s);
   else if(teile[1] === "inventar") seiteInventar(s);
   else if(teile[1] === "aufgaben") seiteAufgaben(s);
+  else if(teile[1] === "bewaesserung") seiteBewaesserung(s, teile[2]);
   else seiteVerwaltung(s);
   window.scrollTo(0, 0);
 }

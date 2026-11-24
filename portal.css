@@ -174,3 +174,26 @@ p.lead a{color:var(--green)}
 .twstufe:focus-visible{outline:3px solid var(--bandgold);outline-offset:1px}
 @media (max-width:700px){.twpos{flex-direction:column;align-items:stretch}.twstufen{justify-content:space-between}.twstufe{width:auto;flex:1}}
 @media (prefers-color-scheme:dark){.twwarn{background:#3d3216;color:#f3d58a}}
+/* Zurück-Link in der Pfadzeile */
+.pfad a.zurueck{font-weight:700;margin-right:10px;text-decoration:none;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:2px 10px}
+/* Veranstaltungen: runde Bereichsknöpfe mit Namen darunter */
+.bereiche{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:14px 8px;margin:8px 0 6px}
+.bereich{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:var(--ink);font-size:13.5px;font-weight:600;text-align:center}
+.bereich .rund{position:relative;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:var(--surface);border:2px solid var(--line);transition:border-color .15s,transform .15s}
+.bereich:hover .rund{border-color:var(--green);transform:translateY(-1px)}
+.bereich.an .rund{border-color:var(--green);background:var(--green);box-shadow:0 0 0 3px var(--bandgold)}
+.bereich.leer{color:var(--muted)}
+.bereich.leer .rund{opacity:.55}
+.bereich .zahl{position:absolute;right:-4px;top:-4px;min-width:22px;height:22px;border-radius:11px;background:var(--bandgold);color:#16241b;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 5px}
+a.chip.festlink{text-decoration:none;background:var(--green);color:#fff;font-size:12.5px;margin-left:4px}
+.grau{color:var(--muted);font-size:13px}
+a.doc{color:var(--green);font-weight:600;text-decoration:none}
+/* Bewässerung: links Kamera, rechts Steuerung */
+.bw{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.bw .karte{margin:0}
+@media (max-width:820px){.bw{grid-template-columns:1fr}}
+.bw-bild{aspect-ratio:16/9;background:#0d130f;color:#cfd8cf;border-radius:10px;display:grid;place-items:center;overflow:hidden;margin-top:10px;padding:0;font-size:14px;text-align:center}
+.bw-bild > span{padding:16px}
+.bw-bild video,.bw-bild img,.bw-bild iframe{width:100%;height:100%;object-fit:cover;border:0}
+.tabelle tr.laeuft td{background:#dcefe0!important}
+@media (prefers-color-scheme:dark){.tabelle tr.laeuft td{background:#1f3a26!important}}
