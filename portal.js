@@ -1657,6 +1657,8 @@ function seiteBandenwerbung(s){
     var vorlage = D.wurzel.filter(function(x){ return x.file && /^bandenwerbung\.docx$/i.test(x.name); })[0];
     var serien = D.jahrDateien.filter(function(x){ return x.file && /serienbrief/i.test(x.name) && /\.docx$/i.test(x.name); })[0];
     var link = function(x, text){ if(!x) return el("span", "grau", text + " (nicht gefunden)"); var a = el("a", null, text); a.href = x.webUrl; a.target = "_blank"; a.rel = "noopener"; return a; };
+    /* Ganze Seite als Entwurf kennzeichnen (Wunsch 24.11.2026): großes schräges Wasserzeichen + Hinweis oben */
+    add(s, el("div", "entwurf-zeichen", "ENTWURF"), add(el("div", "entwurf-banner"), el("b", null, "Entwurf – noch nichts verbindlich. "), "Ablauf, Preise, Bestand und Partnerliste sind ein Arbeitsstand und müssen im Ausschuss noch abgestimmt werden."));
     add(s, el("h1", null, "🪧 Bandenwerbung"), el("p", "lead", "Werbebanden am neuen Sportplatz. Unterlagen im Team „Sportfreunde Schneeberg 1928 e.V.“ › Schriftführer › 06_Bandenwerbung. Bearbeitet wird in Word und Excel, das Portal zeigt den Stand."));
 
     /* Ablauf (Entwurf, 24.11.2026): Schritte laut Verwaltung (Besprechung 24.11.2026), ergänzt um das, was die vorhandenen Dateien zeigen. Offene Punkte stehen am Ende. */

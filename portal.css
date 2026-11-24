@@ -401,3 +401,9 @@ details.anleitung.zu[open] > summary.titel{margin-bottom:10px}
 span.haken{cursor:default}
 .haken:active{transform:translateY(1px)}
 @media (max-width:640px){.matrix.partner .m.jahr{width:40px}.haken{width:30px;height:30px}}
+/* Entwurf-Kennzeichnung (Bandenwerbung) */
+.entwurf-zeichen{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);font-size:clamp(64px,17vw,220px);font-weight:900;letter-spacing:.08em;
+  color:rgba(179,64,47,.13);border:.06em solid rgba(179,64,47,.13);border-radius:.08em;padding:0 .15em;pointer-events:none;z-index:5;white-space:nowrap;user-select:none}
+.entwurf-banner{background:#fbe3d6;border:2px dashed var(--err);color:#7a2a1d;border-radius:10px;padding:10px 14px;margin:10px 0 4px;font-size:15px}
+@media (prefers-color-scheme:dark){.entwurf-banner{background:#3d2516;color:#f3c9ac}.entwurf-zeichen{color:rgba(240,120,100,.12);border-color:rgba(240,120,100,.12)}}
+@media print{.entwurf-zeichen{position:absolute}}
