@@ -554,23 +554,41 @@ function seiteSchluessel(s){
     for(var z = 1; z <= Math.min(12, w.length); z++){ var b = txt(zelle(w, z, 13)), v = [zelle(w, z, 14), zelle(w, z, 15), zelle(w, z, 16)];
       if(!b || /bestand/i.test(txt(v[0]))) continue; if(!v.some(function(x){ return typeof x === "number"; })) continue;
       v.forEach(function(x, i){ if(!leer(x)) spaltenAn[i] = true; }); statZeilen.push([b, v]); }
-    if(statZeilen.length){ var c = el("div", "karte"), t0 = el("table", "tabelle"), k0 = el("tr"), namen = ["Bestand", "Im Umlauf", "Frei"];
-      add(k0, el("th", null, "Schlüssel")); namen.forEach(function(h, i){ if(spaltenAn[i]) add(k0, el("th", "z", h)); }); add(t0, add(el("thead"), k0));
-      var tb0 = el("tbody"); statZeilen.forEach(function(r){ var tr = el("tr"); add(tr, el("td", null, r[0])); r[1].forEach(function(x, i){ if(spaltenAn[i]) add(tr, el("td", "z", txt(x))); }); add(tb0, tr); }); add(t0, tb0);
+    if(statZeilen.length){ var c = el("div", "karte"), t0 = el("table", "matrix"), k0 = el("tr"), namen = ["Bestand", "Im Umlauf", "Frei"];
+      add(k0, el("th", null, "Schlüssel")); namen.forEach(function(h, i){ if(spaltenAn[i]) add(k0, el("th", "m geb", h)); }); add(t0, add(el("thead"), k0));
+      var tb0 = el("tbody"); statZeilen.forEach(function(r){ var tr = el("tr"); add(tr, el("td", null, r[0])); r[1].forEach(function(x, i){ if(spaltenAn[i]) add(tr, el("td", "m geb", txt(x))); }); add(tb0, tr); }); add(t0, tb0);
       add(c, add(el("div", "scroll"), t0)); add(s, c); }
     var such = el("input", "suche"); such.type = "search"; such.placeholder = "Name suchen …";
-    var nurAktiv = el("input"); nurAktiv.type = "checkbox"; nurAktiv.checked = true;
+    /* Darstellung „Gruppiert mit Matrix“ (Vorschlag D, 24.11.2026): Gruppen nach Status, je Schlüsseltyp eine Spalte mit farbigem Punkt.
+       Farben aus dem Blatt „Schlüsseltypen“. Antippen einer Zeile öffnet „Ändern“. */
+    var nurAktiv = el("input"); nurAktiv.type = "checkbox"; nurAktiv.checked = false;
     var la = el("label", "fld"); la.style.flexDirection = "row"; la.style.alignItems = "center"; add(la, nurAktiv, " nur aktive");
     add(s, add(el("div", "reihe"), such, la));
+    var SP = [["gen", "Gen", "Generalschlüssel", /general/i, "#1e5b2e"], ["t1", "T1", "Hütte Tür 1", /t(ü|ue)r\s*1/i, "#1565c0"], ["t2", "T2", "Hütte Tür 2", /t(ü|ue)r\s*2/i, "#6a1b9a"], ["sonst", "Sonst", "Sonstige", /^sonstige/i, "#e0a800"]];
+    SP.forEach(function(x){ var n = Object.keys(farben).filter(function(k){ return x[3].test(k); })[0], f = n && farben[n];
+      if(f && /^#?[0-9a-f]{6}$/i.test(f)) x[4] = (f[0] === "#" ? "" : "#") + f; });
     var box = el("div", "scroll"); add(s, box);
     function zeigen(){ box.textContent = ""; var q = such.value.trim().toLowerCase();
-      var t = el("table", "tabelle"), k = el("tr"); ["Name", "Funktion", "Status", "General", "Tür 1", "Tür 2", "Sonstige", "Bestätigt", ""].forEach(function(h, i){ add(k, el("th", i > 2 && i < 6 ? "z" : null, h)); }); add(t, add(el("thead"), k));
-      var tb = el("tbody"), n = 0;
-      leute.forEach(function(p){ if(nurAktiv.checked && !/^aktiv/i.test(p.status)) return; if(q && (p.name + " " + p.funktion).toLowerCase().indexOf(q) < 0) return; n++;
-        var tr = el("tr"); add(tr, el("td", null, p.name), el("td", null, p.funktion), add(el("td"), el("span", "chip " + (/^aktiv/i.test(p.status) ? "ok" : "grau"), p.status || "–")),
-          el("td", "z", p.gen || ""), el("td", "z", p.t1 || ""), el("td", "z", p.t2 || ""), el("td", null, p.sonst), el("td", null, p.best),
-          add(el("td"), schreibt ? btn("klein", "Ändern", function(){ schluesselBearbeiten(p, leute); }) : null)); add(tb, tr); });
-      add(t, tb); add(box, t); if(!n) add(box, el("p", "lead", "Keine Treffer.")); }
+      var t = el("table", "matrix"), k = el("tr"); add(k, el("th", null, "Name"));
+      SP.forEach(function(x){ var th = el("th", "m"), i = el("i"); i.style.background = x[4]; th.title = x[2]; add(th, i, x[1]); add(k, th); });
+      add(k, el("th", "breit", "Sonstige"), el("th", "breit", "Bestätigt"), el("th", "pf")); add(t, add(el("thead"), k));
+      var tb = el("tbody"), n = 0, reihen = ["Aktiv", "Warteliste", "Zurückgegeben"];
+      leute.forEach(function(p){ var st = p.status || "ohne Status"; if(reihen.indexOf(st) < 0) reihen.push(st); });
+      reihen.forEach(function(st){
+        var g = leute.filter(function(p){ return (p.status || "ohne Status") === st && !(nurAktiv.checked && !/^aktiv/i.test(st)) && !(q && (p.name + " " + p.funktion + " " + p.sonst).toLowerCase().indexOf(q) < 0); });
+        if(!g.length) return; n += g.length;
+        add(tb, add(el("tr", "gr"), el("td", null, st + " · " + g.length)));
+        tb.lastChild.firstChild.colSpan = SP.length + 4;
+        g.forEach(function(p){ var tr = el("tr", /^aktiv/i.test(st) ? null : "aus"), nm = el("th");
+          add(nm, el("b", null, p.name)); if(p.funktion) add(nm, el("small", null, p.funktion)); if(p.sonst) add(nm, el("small", "nurhandy", "+ " + p.sonst)); add(tr, nm);
+          SP.forEach(function(x){ var v = x[0] === "sonst" ? (p.sonst ? "+" : 0) : p[x[0]], td = el("td", "m");
+            if(v){ var pk = el("span", "pk", String(v)); pk.style.background = x[4]; if(x[0] === "sonst") pk.title = p.sonst; add(td, pk); } else add(td, el("span", "leer", "·")); add(tr, td); });
+          add(tr, el("td", "breit", p.sonst), el("td", "breit", p.best), el("td", "pf", schreibt ? "›" : ""));
+          if(schreibt){ tr.classList.add("klickbar"); tr.title = "Ändern"; tr.tabIndex = 0;
+            tr.addEventListener("click", function(){ schluesselBearbeiten(p, leute); });
+            tr.addEventListener("keydown", function(e){ if(e.key === "Enter") schluesselBearbeiten(p, leute); }); }
+          add(tb, tr); }); });
+      add(t, tb); if(n) add(box, t); else add(box, el("p", "lead", "Keine Treffer.")); }
     such.addEventListener("input", zeigen); nurAktiv.addEventListener("change", zeigen); zeigen();
     var sl = schloesser(D.blaetter[BLATT.schloesser] || []);
     if(sl.length){ add(s, el("h2", null, "Schlösser – welche Tür braucht welchen Schlüssel"));
@@ -622,10 +640,23 @@ function seiteInventar(s){
     var liste = inventar(w);
     add(s, el("h1", null, "Inventar"), el("p", "lead", "Die Leihgebühr hier ist der Listenpreis in der Ausleihliste."));
     if(darf("verwaltung")) add(s, add(el("div", "reihe"), btn("primary", "+ Neuer Gegenstand", function(){ bearbeiten(null); }))); else add(s, nurLesenHinweis("verwaltung"));
-    var t = el("table", "tabelle"), k = el("tr"); ["Nr.", "Bezeichnung", "Anzahl", "Lagerort", "Leihgebühr", "Ausleihe", ""].forEach(function(h, i){ add(k, el("th", i === 2 || i === 4 ? "z" : null, h)); }); add(t, add(el("thead"), k));
-    var tb = el("tbody"); liste.forEach(function(i){ var tr = el("tr"); add(tr, el("td", null, i.nr != null ? String(i.nr) : ""), el("td", null, i.bez), el("td", "z", i.anzahl != null ? String(i.anzahl) : ""),
-      el("td", null, [i.ort1, i.ort2].filter(Boolean).join(" / ")), el("td", "z", i.gebuehr != null ? euro(i.gebuehr) : ""), el("td", null, i.wer), add(el("td"), darf("verwaltung") ? btn("klein", "Ändern", function(){ bearbeiten(i); }) : null)); add(tb, tr); });
-    add(t, tb); add(s, add(el("div", "scroll"), t));
+    /* Darstellung „Gruppiert mit Matrix“ (Vorschlag D): nach Lagerort 1 gruppiert, Antippen öffnet „Ändern“. */
+    var darf2 = darf("verwaltung"), such = el("input", "suche"); such.type = "search"; such.placeholder = "Gegenstand suchen …";
+    add(s, add(el("div", "reihe"), such)); var box = el("div", "scroll"); add(s, box);
+    var nat = function(a, b){ return a.localeCompare(b, "de", {numeric: true}); };
+    function zeigen(){ box.textContent = ""; var q = such.value.trim().toLowerCase(), orte = {};
+      liste.forEach(function(i){ if(q && (i.bez + " " + i.ort1 + " " + i.ort2 + " " + i.bem).toLowerCase().indexOf(q) < 0) return; (orte[i.ort1 || "Ohne Lagerort"] = orte[i.ort1 || "Ohne Lagerort"] || []).push(i); });
+      var namen = Object.keys(orte).sort(nat); if(!namen.length){ add(box, el("p", "lead", "Keine Treffer.")); return; }
+      var t = el("table", "matrix"), k = el("tr"); add(k, el("th", null, "Gegenstand"), el("th", "breit", "Nr."), el("th", "m", "Anz."), el("th", "m geb", "Gebühr"), el("th", "breit", "Ausleihe"), el("th", "pf")); add(t, add(el("thead"), k));
+      var tb = el("tbody");
+      namen.forEach(function(o){ add(tb, add(el("tr", "gr"), el("td", null, "📍 " + o + " · " + orte[o].length))); tb.lastChild.firstChild.colSpan = 6;
+        orte[o].sort(function(a, b){ return (a.nr || 0) - (b.nr || 0); }).forEach(function(i){ var nicht = /^nicht/i.test(i.wer), tr = el("tr", nicht ? "aus" : null), nm = el("th");
+          add(nm, el("b", null, i.bez)); if(i.ort2) add(nm, el("small", null, "auch: " + i.ort2)); if(nicht) add(nm, el("small", "nurhandy", "nicht zum Ausleihen")); if(i.bem) add(nm, el("small", null, i.bem));
+          add(tr, nm, el("td", "breit", i.nr != null ? String(i.nr) : ""), el("td", "m", i.anzahl != null ? String(i.anzahl) : (txt(i.anzahlRoh) || "–")), el("td", "m geb", i.gebuehr != null ? euro(i.gebuehr) : "–"), el("td", "breit", i.wer), el("td", "pf", darf2 ? "›" : ""));
+          if(darf2){ tr.classList.add("klickbar"); tr.title = "Ändern"; tr.tabIndex = 0; tr.addEventListener("click", function(){ bearbeiten(i); }); tr.addEventListener("keydown", function(e){ if(e.key === "Enter") bearbeiten(i); }); }
+          add(tb, tr); }); });
+      add(t, tb); add(box, t); }
+    such.addEventListener("input", zeigen); zeigen();
 
     function bearbeiten(pos){
       var d = el("dialog"), f = el("form", "karte"); f.noValidate = true;
