@@ -353,3 +353,11 @@ a.doc{color:var(--green);font-weight:600;text-decoration:none}
 .ampel.klein{gap:3px}.ampel.klein i{width:14px;height:12px;border-radius:4px}
 @media (max-width:640px){.matrix .m.dat{width:84px;font-size:13px}}
 @media print{.matrix tr.gr td{background:#ddd!important;color:#000!important}.matrix .pf{display:none}}
+/* Vereinskalender: Termine im Ort (Gemeinde, Homepage) – nur ansehen, zurückhaltend dargestellt */
+.kal tr.imort td{background:var(--sunken)!important;color:var(--muted)}
+.kal tr.imort td b{color:var(--ink);font-weight:600}
+.chip.quelle{font-size:11.5px;padding:1px 8px}
+.chip.quelle.gem{background:#e3ecf7;color:#1d4f8a}.chip.quelle.hp{background:#dcefe0;color:#1d5a2b}
+@media (prefers-color-scheme:dark){.chip.quelle.gem{background:#1c2d42;color:#b9d3f2}}
+.notiz.konflikt{color:var(--warn);font-weight:600}
+.ortschalter{flex-direction:row!important;align-items:center;gap:8px;font-size:14px;color:var(--muted);margin:4px 0 10px}

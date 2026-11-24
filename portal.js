@@ -993,6 +993,26 @@ function KALQ(){ return TEST ? KalTest : KalLive; }
 var WT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 function kalDatum(dt){ var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ""); return m ? {j: +m[1], mo: +m[2], t: +m[3], h: m[4], mi: m[5], iso: m[1] + "-" + m[2] + "-" + m[3], zeit: m[4] + ":" + m[5]} : null; }
 function isoPlus(iso, tage){ var d = isoZuDatum(iso); d.setDate(d.getDate() + tage); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+/* Termine im Ort (nur ansehen): Homepage 1928schneeberg.de („Termine JJJJ“) und Gemeinde (Kalender der Odenwald-Allianz, Schneeberg).
+   Der Mac holt sie alle 4 Stunden (Tools/termine_extern.py) und legt sie im Team Liegenschaften ab: General/Kalender/Termine_im_Ort.json.
+   Ohne Zugriff auf die Datei zeigt der Kalender einfach nur die Vereinstermine. */
+var ORT_PFAD = "General/Kalender/Termine_im_Ort.json", ortCache = null;
+function ortLaden(){
+  if(ortCache) return ortCache;
+  if(TEST){ var j = new Date().getFullYear(), m = pad(new Date().getMonth() + 1);
+    return ortCache = Promise.resolve({termine: [
+      {quelle: "Gemeinde", titel: "Adventsglühwein", start: j + "-" + m + "-03", ende: j + "-" + m + "-03", zeit: "16:30", ort: "Dorfwiesenhaus", veranstalter: "Musikverein (Beispiel)", link: "#"},
+      {quelle: "Homepage", titel: "Arbeitseinsatz", start: j + "-" + m + "-14", ende: j + "-" + m + "-14", zeit: "", ort: "", veranstalter: "Sportfreunde Schneeberg", link: "#"},
+      {quelle: "Homepage", titel: "Jugendturnier", start: j + "-" + m + "-20", ende: j + "-" + m + "-21", zeit: "", ort: "", veranstalter: "Sportfreunde Schneeberg", link: "#"}]}); }
+  return ortCache = finden().then(function(i){ return gf("/drives/" + i.drive + "/root:/" + pfadK(ORT_PFAD)); })
+    .then(function(it){ return fetch(it["@microsoft.graph.downloadUrl"]); })
+    .then(function(r){ if(!r.ok) throw new Error("Datei " + r.status); return r.json(); })
+    .catch(function(){ ortCache = null; return null; });
+}
+var ORT_AN = (function(){ try{ return localStorage.getItem("spfrOrtTermine") !== "aus"; }catch(_){ return true; } })();
+/* gleicher Termin wie im Vereinskalender? (gleicher Tag und ein gemeinsames Wort ab 5 Buchstaben, z. B. „Schlachtfest“) */
+function ortDoppelt(t, liste){ var w = (t.titel.toLowerCase().match(/[a-zäöüß]{5,}/g) || []);
+  return liste.some(function(ev){ var a = kalDatum(ev.start.dateTime); if(!a || a.iso !== t.start) return false; var s2 = (ev.subject || "").toLowerCase(); return w.some(function(x){ return s2.indexOf(x) > -1; }); }); }
 function seiteKalender(s, monatTeil){
   pfad([["Start", "#/"], ["Vereinskalender"]]);
   ladeHinweis(s);
@@ -1000,7 +1020,7 @@ function seiteKalender(s, monatTeil){
   var j = mm ? +mm[1] : heute.getFullYear(), mo = mm ? +mm[2] : heute.getMonth() + 1; KAL_MONAT = j + "-" + pad(mo);
   var von = j + "-" + pad(mo) + "-01T00:00:00", nj = mo === 12 ? j + 1 : j, nm = mo === 12 ? 1 : mo + 1, bis = nj + "-" + pad(nm) + "-01T00:00:00";
   var vj = mo === 1 ? j - 1 : j, vm = mo === 1 ? 12 : mo - 1;
-  KALQ().finden().then(function(k){ return KALQ().termine(von, bis).then(function(liste){
+  KALQ().finden().then(function(k){ return Promise.all([KALQ().termine(von, bis), ortLaden()]).then(function(x){ var liste = x[0], ort = x[1];
     s.textContent = "";
     add(s, el("h1", null, "Vereinskalender"), el("p", "lead", k.darf ? "Termine des Vereins, z. B. Ausschusssitzungen. Du kannst Termine anlegen, ändern und löschen – das landet direkt im Outlook-Kalender." : "Termine des Vereins, z. B. Ausschusssitzungen. Du kannst hier nur lesen."));
     var kopf = el("div", "reihe monat"), zur = el("a", "btn klein", "‹ " + MONATE[vm - 1]), vor = el("a", "btn klein", MONATE[nm - 1] + " ›");
@@ -1008,15 +1028,32 @@ function seiteKalender(s, monatTeil){
     var heuteL = el("a", "btn klein", "Heute"); heuteL.href = "#/kalender/" + heute.getFullYear() + "-" + pad(heute.getMonth() + 1);
     add(kopf, zur, el("h2", null, MONATE[mo - 1] + " " + j), vor, heuteL, el("span", "sp"), k.darf ? btn("primary", "+ Neuer Termin", function(){ kalBearbeiten(null, j + "-" + pad(mo) + "-" + pad(Math.min(28, heute.getDate()))); }) : null);
     add(s, kopf);
-    if(!liste.length){ add(s, el("p", "lead", "Keine Termine in diesem Monat.")); return; }
+    /* Termine im Ort, die in diesen Monat fallen (ohne die, die schon im Vereinskalender stehen) */
+    var mVon = von.slice(0, 10), mBis = bis.slice(0, 10);
+    var imOrt = ort && ort.termine ? ort.termine.filter(function(t){ return t.start < mBis && (t.ende || t.start) >= mVon && !ortDoppelt(t, liste); }) : [];
+    if(ort){ var cb = el("input"); cb.type = "checkbox"; cb.checked = ORT_AN;
+      cb.addEventListener("change", function(){ ORT_AN = cb.checked; try{ localStorage.setItem("spfrOrtTermine", ORT_AN ? "an" : "aus"); }catch(_){} route(); });
+      var lo = el("label", "fld haken ortschalter"); add(lo, cb, " Termine im Ort anzeigen (Gemeinde und Homepage, nur ansehen)"); add(s, lo); }
+    if(!ORT_AN) imOrt = [];
+    var ortTage = {}; imOrt.forEach(function(t){ for(var d0 = t.start; d0 <= (t.ende || t.start); d0 = isoPlus(d0, 1)) (ortTage[d0] = ortTage[d0] || []).push(t); });
+    var eintraege = liste.map(function(ev){ var a = kalDatum(ev.start.dateTime); return {art: "verein", ev: ev, iso: a ? a.iso : "", zeit: ev.isAllDay ? "" : (a ? a.zeit : "")}; })
+      .concat(imOrt.map(function(t){ return {art: "ort", t: t, iso: t.start, zeit: t.zeit || ""}; }))
+      .sort(function(a, b){ return a.iso !== b.iso ? (a.iso < b.iso ? -1 : 1) : (a.zeit < b.zeit ? -1 : (a.zeit > b.zeit ? 1 : 0)); });
+    if(!eintraege.length){ add(s, el("p", "lead", "Keine Termine in diesem Monat.")); return; }
     var t = el("table", "tabelle kal"), tb = el("tbody");
     add(t, add(el("thead"), add(el("tr"), el("th", null, "Datum"), el("th", null, "Uhrzeit"), el("th", null, "Termin"), el("th", "ort", "Ort"), k.darf ? el("th", null, "") : null)), tb);
-    liste.forEach(function(ev){
+    eintraege.forEach(function(en){
+      if(en.art === "ort"){ var t0 = en.t, d1 = isoZuDatum(t0.start), tg = WT[d1.getDay()] + ", " + t0.start.slice(8, 10) + "." + t0.start.slice(5, 7) + ".";
+        if(t0.ende && t0.ende !== t0.start) tg += " – " + t0.ende.slice(8, 10) + "." + t0.ende.slice(5, 7) + ".";
+        var ti = el("td"); add(ti, el("span", "chip quelle " + (t0.quelle === "Gemeinde" ? "gem" : "hp"), t0.quelle === "Gemeinde" ? "🏛 Gemeinde" : "⚽ Homepage"), " ", el("b", null, t0.titel));
+        if(t0.ort) add(ti, el("div", "notiz ortm", "📍 " + t0.ort)); if(t0.veranstalter) add(ti, el("div", "notiz", t0.veranstalter));
+        var tro = el("tr", "imort"); add(tro, el("td", null, tg), el("td", null, t0.zeit || "ganztägig"), ti, el("td", "ort", t0.ort), k.darf ? el("td") : null); add(tb, tro); return; }
+      var ev = en.ev;
       var a = kalDatum(ev.start.dateTime), e = kalDatum(ev.end.dateTime); if(!a) return;
       var d = isoZuDatum(a.iso), zeit = ev.isAllDay ? "ganztägig" : a.zeit + (e ? "–" + e.zeit : "");
       var tag = WT[d.getDay()] + ", " + pad(a.t) + "." + pad(a.mo) + ".";
       if(ev.isAllDay && e && isoPlus(a.iso, 1) !== e.iso){ var ende = isoZuDatum(isoPlus(e.iso, -1)); tag += " – " + pad(ende.getDate()) + "." + pad(ende.getMonth() + 1) + "."; }
-      var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var fe = festVonTitel(ev.subject); if(fe){ var fl = el("a", "chip festlink", fe.sym + " " + fe.name + " " + a.j + " ›"); fl.href = vaLink(fe, a.j); add(tit, " ", fl); } var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview));
+      var tit = el("td"); add(tit, el("b", null, ev.subject || "(ohne Titel)")); var fe = festVonTitel(ev.subject); if(fe){ var fl = el("a", "chip festlink", fe.sym + " " + fe.name + " " + a.j + " ›"); fl.href = vaLink(fe, a.j); add(tit, " ", fl); } var ortT = (ev.location && ev.location.displayName) || ""; if(ortT) add(tit, el("div", "notiz ortm", "📍 " + ortT)); if(ev.bodyPreview) add(tit, el("div", "notiz", ev.bodyPreview)); if(ortTage[a.iso]) add(tit, el("div", "notiz konflikt", "⚠ Am selben Tag im Ort: " + ortTage[a.iso].map(function(x){ return x.titel; }).join(", ")));
       var tr = el("tr"); add(tr, el("td", null, tag), el("td", null, zeit), tit, el("td", "ort", ortT),
         k.darf ? add(el("td", "z"), btn("klein", "Ändern", function(){ kalBearbeiten(ev); })) : null);
       add(tb, tr); });
