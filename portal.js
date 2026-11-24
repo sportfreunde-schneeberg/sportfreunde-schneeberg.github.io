@@ -1183,7 +1183,8 @@ var VaTest = {
     function d(name, kinder){ return {id: "i" + (++n), name: name, folder: {childCount: (kinder || []).length}, webUrl: "#", kinder: kinder || []}; }
     function f(name){ return {id: "i" + (++n), name: name, file: {}, webUrl: "#", size: 20000, lastModifiedDateTime: j + "-10-01T10:00:00Z"}; }
     VaTest.baum = d("root", [d("General", [d("Aufgaben Veranstaltungen", [f("Aufgabe Getränkestand.xlsx")])]),
-      d("Weihnachtsfeier", [d("Weihnachtsfeier " + (j - 1), [f("Anmeldungen.xlsx"), f("Tombolapreise.docx"), f("Getränke.docx"), f("Bestellung Essen.docx"), f("Rückblick Verbesserungen.docx")]), d("Weihnachtsfeier " + j, [f("Tombola " + j + ".docx"), f("Dienstplan Weihnachtsfeier.xlsx")])]),
+      d("Weihnachtsfeier", [d("Weihnachtsfeier " + (j - 1), [f("Anmeldungen.xlsx"), f("Tombolapreise.docx"), f("Getränke.docx"), f("Bestellung Essen.docx"), f("Rückblick Verbesserungen.docx")]), d("Weihnachtsfeier " + j, [f("Tombola " + j + ".docx"), f("Dienstplan Weihnachtsfeier.xlsx")]),
+        d("Weihnachtsfeier " + (j + 1), [d("Dienstplan"), d("Getränke"), d("Essen"), d("Tombola", [f("Tombola " + (j + 1) + ".xlsx")])])]),
       d("Schlachtfest", [d("Schlachtfest " + j, [f("Dienstplan Schlachtfest " + j + ".xlsx"), f("Plakat.pdf"), f("Rechnung Beispiel.pdf")])]),
       d("Kerb", [d("Kerb " + j, [f("Dienstplan Kerb.xlsx"), f("Speisekarte " + j + ".docx")])])]);
     return VaTest.baum; },
@@ -1291,15 +1292,18 @@ function seiteFestJahr(s, f, jahr, ber){
       if(ord && ord.webUrl){ var o = el("a", null, "Ordner in Teams öffnen"); o.href = ord.webUrl; o.target = "_blank"; o.rel = "noopener"; add(lead, " · ", o); }
       add(s, lead);
       if(!ord){ add(s, el("div", "hinweis", "Für " + jahr + " gibt es im Team „Veranstaltungen“ noch keinen Ordner. Anlegen in Teams im Kanal „" + (D.ordner ? D.ordner.name : f.name) + "“: Ordner „" + f.name + " " + jahr + "“.")); return; }
-      /* Bereiche: Unterordner als eigene Knöpfe, Dateien nach Namen sortiert */
+      /* Bereiche: Dateien nach Namen sortiert. Ein Unterordner, dessen Name zu einem Bereich passt (z. B. „Dienstplan“, „Tombola“),
+         gehört zu diesem Knopf; andere Unterordner bekommen einen eigenen Knopf. */
       var gruppen = {}, reihenfolge = [];
-      function rein(k, name, sym, it){ if(!gruppen[k]){ gruppen[k] = {key: k, name: name, sym: sym, dateien: [], ordner: null}; reihenfolge.push(k); } if(it) gruppen[k].dateien.push(it); return gruppen[k]; }
+      function rein(k, name, sym, it){ if(!gruppen[k]){ gruppen[k] = {key: k, name: name, sym: sym, dateien: [], ordner: []}; reihenfolge.push(k); } if(it) gruppen[k].dateien.push(it); return gruppen[k]; }
       BEREICHE.forEach(function(b){ if(b.key === "dienstplan" || b.key === "getraenke" || b.key === "essen" || b.key === "tombola") rein(b.key, b.name, b.sym); });
       inhalt.forEach(function(it){
-        if(it.folder){ var b = bereichVon(it.name), g = rein("ordner:" + it.name, it.name, b.key === "sonstiges" ? "📁" : b.sym); g.ordner = it; return; }
-        var b2 = bereichVon(it.name); rein(b2.key, b2.name, b2.sym, it); });
+        var b = bereichVon(it.name);
+        if(it.folder){ if(b.key !== "sonstiges" && b.key !== "bilder" && b.name.toLowerCase().indexOf(it.name.toLowerCase().split(" ")[0]) === 0) rein(b.key, b.name, b.sym).ordner.push(it);
+          else rein("ordner:" + it.name, it.name, b.key === "sonstiges" ? "📁" : b.sym).ordner.push(it); return; }
+        rein(b.key, b.name, b.sym, it); });
       var knoepfe = el("div", "bereiche");
-      reihenfolge.forEach(function(k){ var g = gruppen[k], n = g.ordner ? ((g.ordner.folder && g.ordner.folder.childCount) || 0) : g.dateien.length;
+      reihenfolge.forEach(function(k){ var g = gruppen[k], n = g.dateien.length + g.ordner.reduce(function(m, o){ return m + ((o.folder && o.folder.childCount) || 0); }, 0);
         var a = el("a", "bereich" + (ber === k ? " an" : "") + (n ? "" : " leer")); a.href = vaLink(f, jahr, k);
         add(a, add(el("span", "rund"), g.sym, n ? el("span", "zahl", String(n)) : null), el("span", "name", g.name)); add(knoepfe, a); });
       add(s, knoepfe);
@@ -1307,15 +1311,18 @@ function seiteFestJahr(s, f, jahr, ber){
       if(!ber){ add(box, el("p", "lead", "Wähle einen Bereich.")); return; }
       var g = gruppen[ber]; if(!g){ add(box, el("p", "lead", "Diesen Bereich gibt es in " + jahr + " nicht.")); return; }
       var karte = el("div", "karte"); add(box, karte); add(karte, el("h2", null, g.sym + " " + g.name));
-      if(g.ordner){ var lo = el("a", null, "Ordner in Teams öffnen"); lo.href = g.ordner.webUrl; lo.target = "_blank"; lo.rel = "noopener"; add(karte, add(el("p", "lead"), lo));
-        var platz = el("div", "laden", "Wird geladen …"); add(karte, platz);
-        VAQ().kinder(g.ordner.id).then(function(l){ platz.replaceWith(dateiListe(l)); }).catch(function(e){ platz.replaceWith(el("div", "fehler", vaFehler(e))); }); return; }
-      if(!g.dateien.length){ add(karte, el("p", "lead", "Noch keine Unterlagen für " + g.name + " " + jahr + ". Dateien dafür im Jahresordner in Teams ablegen; der Name entscheidet über den Bereich (z. B. „Dienstplan …“, „Getränke …“, „Tombola …“).")); return; }
-      add(karte, dateiListe(g.dateien));
-      if(ber === "dienstplan") g.dateien.filter(function(d){ return /\.xlsx$/i.test(d.name); }).forEach(function(d){
-        var platz2 = el("div", "laden", "Dienstplan „" + d.name + "“ wird geladen …"); add(karte, platz2);
-        VAQ().blatt(d.id).then(function(b){ var c = el("div"); add(c, el("h2", null, d.name + " · Blatt „" + b.name + "“"), tabelleAus(b.werte)); platz2.replaceWith(c); })
-          .catch(function(){ platz2.replaceWith(el("p", "grau", "„" + d.name + "“ ließ sich nicht als Tabelle anzeigen – bitte in Excel öffnen.")); }); });
+      if(g.ordner.length){ var lp = el("p", "lead"); g.ordner.forEach(function(o, i){ var lo = el("a", null, "Ordner „" + o.name + "“ in Teams öffnen"); lo.href = o.webUrl; lo.target = "_blank"; lo.rel = "noopener"; if(i) add(lp, " · "); add(lp, lo); }); add(karte, lp); }
+      var platz = el("div", "laden", "Wird geladen …"); add(karte, platz);
+      Promise.all(g.ordner.map(function(o){ return VAQ().kinder(o.id); })).then(function(l){
+        var alleD = g.dateien.concat([].concat.apply([], l));
+        if(!alleD.length){ platz.replaceWith(el("p", "lead", "Noch keine Unterlagen für " + g.name + " " + jahr + ". Dateien dafür " + (g.ordner.length ? "in den Ordner „" + g.ordner[0].name + "“" : "in den Jahresordner") + " in Teams legen; im Jahresordner entscheidet der Name über den Bereich (z. B. „Dienstplan …“, „Getränke …“, „Tombola …“).")); return; }
+        platz.replaceWith(dateiListe(alleD));
+        /* Dienstplan und Tombola: Excel direkt als Tabelle zeigen */
+        if(ber === "dienstplan" || ber === "tombola") alleD.filter(function(d){ return !d.folder && /\.xlsx$/i.test(d.name); }).forEach(function(d){
+          var platz2 = el("div", "laden", "„" + d.name + "“ wird geladen …"); add(karte, platz2);
+          VAQ().blatt(d.id).then(function(b){ var c = el("div"); add(c, el("h2", null, d.name + " · Blatt „" + b.name + "“"), tabelleAus(b.werte)); platz2.replaceWith(c); })
+            .catch(function(){ platz2.replaceWith(el("p", "grau", "„" + d.name + "“ ließ sich nicht als Tabelle anzeigen – bitte in Excel öffnen.")); }); });
+      }).catch(function(e){ platz.replaceWith(el("div", "fehler", vaFehler(e))); });
     });
   }).catch(function(e){ fehlerZeigen(vaFehler(e)); });
 }
