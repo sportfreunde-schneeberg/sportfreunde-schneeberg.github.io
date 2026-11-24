@@ -1559,18 +1559,18 @@ function seiteBandenwerbung(s){
     else {
       var kopf = w[0].map(function(x){ return txt(x).toLowerCase(); }), sp = function(re, std){ var i = kopf.findIndex(function(x){ return re.test(x); }); return i < 0 ? std : i; };
       var cF = sp(/^anschrift1/, 1), cO = sp(/^ort/, 5), cL = sp(/^lfdm/, 6), cP = sp(/^preisl/, 7), cB = sp(/^brutto/, 10), cR = sp(/^renr/, 15);
-      var gruppen = [], g = null;
-      w.slice(1).forEach(function(r){ var mark = txt(r[0]); if(!txt(r[cF])) return; if(mark || !g){ g = {name: mark || "Ohne Zuordnung", zeilen: []}; gruppen.push(g); } g.zeilen.push(r); });
+      /* Spalte A enthält nur vereinzelt Vermerke (z. B. „Bande 1“, „Gekündigt 2018“) – als Hinweis an der Zeile, keine Gruppen */
+      var gruppen = [{name: "Laut Jahresliste", zeilen: w.slice(1).filter(function(r){ return txt(r[cF]); })}];
       var t = el("table", "matrix"), tb = el("tbody"), sumL = 0, sumB = 0, n = 0;
       add(t, add(el("thead"), add(el("tr"), el("th", null, "Firma"), el("th", "m", "lfdm"), el("th", "m geb breit", "€/lfdm"), el("th", "m geb", "Brutto/Jahr"), el("th", "breit", "Re-Nr."))), tb);
       gruppen.forEach(function(gr){ var gl = gr.zeilen.reduce(function(a, r){ return a + (bwZahl(r[cL]) || 0); }, 0);
         add(tb, add(el("tr", "gr"), el("td", null, gr.name + " · " + gr.zeilen.length + " Partner · " + zahlText(gl) + " lfdm"))); tb.lastChild.firstChild.colSpan = 5;
         gr.zeilen.forEach(function(r){ n++; var l = bwZahl(r[cL]), b = bwZahl(r[cB]), p = bwZahl(r[cP]); sumL += l || 0; sumB += b || 0;
-          var gek = /gekündigt|kündig/i.test(gr.name), nm = el("th"); add(nm, el("b", null, txt(r[cF])), el("small", null, txt(r[cO])));
+          var vermerk = txt(r[0]), gek = /gekündigt|kündig/i.test(vermerk), nm = el("th"); add(nm, el("b", null, txt(r[cF])), el("small", null, txt(r[cO]) + (vermerk ? " · Vermerk: " + vermerk : "")));
           add(tb, add(el("tr", gek ? "aus" : null), nm, el("td", "m", l != null ? zahlText(l) : "–"), el("td", "m geb breit", p != null ? euro(p) : "–"), el("td", "m geb", b != null ? euro(rund(b)) : "–"), el("td", "breit", txt(r[cR])))); }); });
       add(s, add(el("div", "summe"), add(el("span"), "Werbepartner ", el("b", null, String(n))), add(el("span"), "laufende Meter ", el("b", null, zahlText(sumL))), add(el("span"), "Brutto/Jahr ", el("b", null, euro(rund(sumB))))));
       add(s, add(el("div", "scroll"), t));
-      add(s, el("p", "grau", "Gruppen = Kennzeichnung in Spalte A der Excel (z. B. „Bande 1“). Summen sind aus der Liste gerechnet, maßgeblich sind die Rechnungen."));
+      add(s, el("p", "grau", "„Vermerk“ = Eintrag in Spalte A der Excel. Summen sind aus der Liste gerechnet, maßgeblich sind die Rechnungen."));
     }
 
     /* Dateien */
