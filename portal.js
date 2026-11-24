@@ -725,32 +725,67 @@ function seiteTeamwear(s){
     var zeilen = twZeilen(w);
     add(s, el("h1", null, "Teamwear-Status"),
       el("p", "lead", darf ? "Du kannst die Stufen hier abhaken. Jeder Klick wird sofort in der Excel gespeichert." : "Stand aller Bestellungen. Abhaken kann nur der Teamwear-Verantwortliche."));
-    var zaehl = {}; zeilen.forEach(function(r){ zaehl[r.status] = (zaehl[r.status] || 0) + 1; });
-    var c = el("div", "summe"); ["zu bestellen", "bestellt", "Zahlung offen", "abgeschlossen", "storniert"].forEach(function(k){ add(c, add(el("span"), el("i", "lampe " + twLampe(k)), k + " ", el("b", null, String(zaehl[k] || 0)))); }); add(s, c);
+    var c = el("div", "summe"); add(s, c);
+    function zaehlen(){ var zaehl = {}; zeilen.forEach(function(r){ zaehl[r.status] = (zaehl[r.status] || 0) + 1; }); c.textContent = "";
+      ["zu bestellen", "bestellt", "Zahlung offen", "abgeschlossen", "storniert"].forEach(function(k){ add(c, add(el("span"), el("i", "lampe " + twLampe(k)), k + " ", el("b", null, String(zaehl[k] || 0)))); }); }
     var filter = el("select"); filter.style.maxWidth = "220px";
-    [["offen", "Alle offenen"], ["alle", "Alle"], ["zu bestellen", "zu bestellen"], ["bestellt", "bestellt"], ["Zahlung offen", "Zahlung offen"], ["abgeschlossen", "abgeschlossen"], ["storniert", "storniert"], ["pruefen", "Preis prüfen"]]
+    [["offen", "Alle offenen"], ["alle", "Alle (ohne stornierte)"], ["zu bestellen", "zu bestellen"], ["bestellt", "bestellt"], ["Zahlung offen", "Zahlung offen"], ["abgeschlossen", "abgeschlossen"], ["pruefen", "Preis prüfen"]]
       .forEach(function(o){ var op = el("option", null, o[1]); op.value = o[0]; add(filter, op); });
     filter.value = TW_FILTER;
     var such = el("input", "suche"); such.type = "search"; such.placeholder = "Name, Artikel oder Mannschaft …";
     add(s, add(el("div", "reihe"), add(el("label", "fld", "Anzeigen"), filter), such));
-    var box = el("div", "twliste"); add(s, box);
+    var box = el("div", "twliste"), archiv = el("div", "twarchiv"); add(s, box, archiv);
     zeilen.forEach(function(r){ r.pruefen = twPreisPruefen(r, preise); });
     function passt(r, q){
-      if(TW_FILTER === "offen" && (r.status === "abgeschlossen" || r.status === "storniert")) return false;
+      if(r.status === "storniert") return false; /* stornierte stehen nur unten im Archiv */
+      if(TW_FILTER === "offen" && r.status === "abgeschlossen") return false;
       if(TW_FILTER === "pruefen" && !r.pruefen) return false;
       if(TW_FILTER !== "offen" && TW_FILTER !== "alle" && TW_FILTER !== "pruefen" && r.status !== TW_FILTER) return false;
       return !q || (r.name + " " + r.artikel + " " + r.mannschaft).toLowerCase().indexOf(q) > -1; }
-    function zeigen(){ box.textContent = ""; TW_FILTER = filter.value; var q = such.value.trim().toLowerCase();
-      /* Bestellungen (gleiche Bestell-Nr) zusammenfassen, neueste zuerst */
-      var gruppen = [], idx = {};
-      zeilen.slice().reverse().forEach(function(r){ if(!passt(r, q)) return; var k = r.nr || ("z" + r.zeile);
+    /* Bestellungen (gleiche Bestell-Nr) zusammenfassen, neueste zuerst */
+    function gruppieren(liste){ var gruppen = [], idx = {};
+      liste.slice().reverse().forEach(function(r){ var k = r.nr || ("z" + r.zeile);
         if(!(k in idx)){ idx[k] = gruppen.length; gruppen.push({r: r, pos: []}); } gruppen[idx[k]].pos.unshift(r); });
-      gruppen.forEach(function(g){ add(box, twBestellung(g)); });
-      if(!gruppen.length) add(box, el("p", "lead", "Keine Bestellungen in dieser Ansicht.")); }
-    function twBestellung(g){
-      var b = el("div", "twbest"), r = g.r, h = el("div", "twkopf"), summe = g.pos.reduce(function(m, p){ return m + (p.summe || 0); }, 0);
-      add(h, el("b", null, r.name || "–"), el("span", null, r.mannschaft), el("span", null, datumText(r.eingang)), r.nr ? el("span", null, "Nr. " + r.nr) : null, el("span", "sp"), add(el("span"), "Summe ", el("b", null, euro(summe))));
-      add(b, h); g.pos.forEach(function(p){ add(b, twPosition(p)); }); return b; }
+      return gruppen; }
+    var ARCHIV_OFFEN = false;
+    function zeigen(){ zaehlen(); box.textContent = ""; archiv.textContent = ""; TW_FILTER = filter.value; var q = such.value.trim().toLowerCase();
+      var gruppen = gruppieren(zeilen.filter(function(r){ return passt(r, q); }));
+      gruppen.forEach(function(g){ add(box, twBestellung(g, false)); });
+      if(!gruppen.length) add(box, el("p", "lead", "Keine Bestellungen in dieser Ansicht."));
+      /* Archiv: stornierte Positionen, zugeklappt ganz unten */
+      var storno = gruppieren(zeilen.filter(function(r){ return r.status === "storniert" && (!q || (r.name + " " + r.artikel + " " + r.mannschaft).toLowerCase().indexOf(q) > -1); }));
+      var det = el("details", "karte"); det.open = ARCHIV_OFFEN; det.addEventListener("toggle", function(){ ARCHIV_OFFEN = det.open; });
+      add(det, add(el("summary"), el("b", null, "🗄️ Archiv: storniert (" + storno.length + (storno.length === 1 ? " Bestellung" : " Bestellungen") + ")")),
+        el("p", "grau", "Stornierte Bestellungen bleiben in der Excel stehen, werden hier aber nicht mehr bei den offenen gezeigt." + (darf ? " „Storno zurücknehmen“ holt sie zurück." : "")));
+      storno.forEach(function(g){ add(det, twBestellung(g, true)); });
+      if(!storno.length) add(det, el("p", "lead", "Keine stornierten Bestellungen."));
+      add(archiv, det); }
+    function twBestellung(g, imArchiv){
+      var b = el("div", "twbest" + (imArchiv ? " storniert" : "")), r = g.r, h = el("div", "twkopf"), summe = g.pos.reduce(function(m, p){ return m + (p.summe || 0); }, 0);
+      var knopf = null;
+      if(darf){ knopf = imArchiv ? btn("klein", "Storno zurücknehmen", function(){ bestellungStorno(g, false, knopf); })
+        : btn("klein gefahr", "Bestellung stornieren", function(){ bestellungStorno(g, true, knopf); }); }
+      add(h, el("b", null, r.name || "–"), el("span", null, r.mannschaft), el("span", null, datumText(r.eingang)), r.nr ? el("span", null, "Nr. " + r.nr) : null, el("span", "sp"), add(el("span"), "Summe ", el("b", null, euro(summe))), knopf);
+      add(b, h); g.pos.forEach(function(p){ add(b, imArchiv ? twArchivPosition(p) : twPosition(p)); }); return b; }
+    function twArchivPosition(r){ var z = el("div", "twpos"), links = el("div", "twtext");
+      add(links, add(el("div", "twart"), el("i", "lampe grau", ""), el("b", null, (r.anzahl > 1 ? r.anzahl + " × " : "") + r.artikel), el("span", null, [r.groesse, r.initialen && r.initialen !== "-" ? "Initialen " + r.initialen : ""].filter(Boolean).join(" · "))),
+        add(el("div", "twmeta"), el("span", null, "storniert"), el("span", null, euro(r.summe))));
+      if(r.bem) add(links, el("div", "twmeta", r.bem));
+      add(z, links); return z; }
+    /* Ganze Bestellung stornieren bzw. Storno zurücknehmen: Spalte S (Storniert) jeder Position. Vorher frisch lesen und prüfen. */
+    function bestellungStorno(g, an, knopf){
+      if(an && !confirm("Bestellung " + (g.r.nr ? "Nr. " + g.r.nr + " " : "") + "von " + (g.r.name || "–") + " mit " + g.pos.length + (g.pos.length === 1 ? " Position" : " Positionen") + " stornieren?\n\nSie bleibt in der Excel stehen und wandert unten ins Archiv.")) return;
+      if(!darf){ return; }
+      if(!TEST && !SCHREIBEN_FREI){ zeigeToast("Eintragen ist im Portal noch gesperrt."); return; }
+      knopf.disabled = true; var sp = spalte(STUFEN[4][1]);
+      TWQ().lesen().then(function(w2){ var jetzt = twZeilen(w2);
+        g.pos.forEach(function(p){ var x = jetzt.filter(function(y){ return y.zeile === p.zeile; })[0];
+          if(!x || x.nr !== p.nr || x.artikel !== p.artikel) throw new Error("Die Bestellung hat sich in der Excel verändert. Bitte die Seite neu laden."); });
+        return g.pos.reduce(function(k, p){ return k.then(function(){ return TWQ().schreiben(sp + p.zeile + ":" + sp + p.zeile, [[an ? "Ja" : ""]]); }); }, Promise.resolve());
+      }).then(function(){ g.pos.forEach(function(p){ p.stufen[4] = an; p.status = twStatus(p.stufen); });
+        zeigeToast(an ? "Bestellung storniert – steht jetzt im Archiv" : "Storno zurückgenommen"); zeigen(); })
+        .catch(function(e){ knopf.disabled = false; zeigeToast(e && e.status ? twFehler(e) : (e.message || "Fehler beim Speichern.")); });
+    }
     function twPosition(r){
       var z = el("div", "twpos"), links = el("div", "twtext");
       add(links, add(el("div", "twart"), el("i", "lampe " + twLampe(r.status), ""), el("b", null, (r.anzahl > 1 ? r.anzahl + " × " : "") + r.artikel), el("span", null, [r.groesse, r.initialen && r.initialen !== "-" ? "Initialen " + r.initialen : ""].filter(Boolean).join(" · "))),
@@ -776,7 +811,7 @@ function seiteTeamwear(s){
         var sp = spalte(STUFEN[i][1]);
         if(i === 2){ neu[1] = neu[2]; return TWQ().schreiben(spalte(STUFEN[1][1]) + r.zeile + ":" + sp + r.zeile, [[neu[2] ? "Ja" : "", neu[2] ? "Ja" : ""]]); }
         return TWQ().schreiben(sp + r.zeile + ":" + sp + r.zeile, [[neu[i] ? "Ja" : ""]]);
-      }).then(function(){ r.stufen = neu; r.status = twStatus(neu); zeigeToast(r.artikel + ": " + STUFEN[i][0] + (neu[i] ? " ✓" : " entfernt")); pos.replaceWith(twPosition(r)); })
+      }).then(function(){ r.stufen = neu; r.status = twStatus(neu); zeigeToast(r.artikel + ": " + STUFEN[i][0] + (neu[i] ? " ✓" : " entfernt") + (i === 4 && neu[i] ? " – steht jetzt im Archiv" : "")); if(i === 4) zeigen(); else pos.replaceWith(twPosition(r)); })
         .catch(function(e){ pos.querySelectorAll(".twstufe").forEach(function(b){ b.disabled = false; }); add(pos, el("div", "fehler", e && e.status ? twFehler(e) : (e.message || "Fehler beim Speichern."))); });
     }
     filter.addEventListener("change", zeigen); such.addEventListener("input", zeigen); zeigen();
