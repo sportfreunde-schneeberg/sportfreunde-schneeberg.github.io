@@ -1,5 +1,5 @@
 {
- "stand": "2026-11-25T09:14+01:00",
+ "stand": "2026-11-25T09:29+01:00",
  "veranstaltungen": [
   {
    "name": "Weihnachtsfeier 2026",
@@ -54,7 +54,6 @@
      "bis": "",
      "hinweis": "",
      "ids": [
-      "WF26-09",
       "WF26-10"
      ]
     },
