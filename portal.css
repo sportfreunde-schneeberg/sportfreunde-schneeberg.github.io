@@ -407,3 +407,10 @@ span.haken{cursor:default}
 .entwurf-banner{background:#fbe3d6;border:2px dashed var(--err);color:#7a2a1d;border-radius:10px;padding:10px 14px;margin:10px 0 4px;font-size:15px}
 @media (prefers-color-scheme:dark){.entwurf-banner{background:#3d2516;color:#f3c9ac}.entwurf-zeichen{color:rgba(240,120,100,.12);border-color:rgba(240,120,100,.12)}}
 @media print{.entwurf-zeichen{position:absolute}}
+/* Dienstplan (buchbar) */
+.schalter{display:flex;align-items:center;gap:8px;font-weight:600;margin:6px 0 10px}
+.schalter input{width:20px;height:20px;accent-color:var(--green)}
+.chip.frei{background:#fbe3d6;color:#7a3413}
+@media (prefers-color-scheme:dark){.chip.frei{background:#3d2516;color:#f3c9ac}}
+.matrix.dp tr.gr td small{display:block;font-weight:400;opacity:.85;margin-top:2px}
+.matrix.dp tr.frei td{color:var(--muted)}
