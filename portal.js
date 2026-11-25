@@ -655,6 +655,9 @@ function schluesselBearbeiten(p, leute){
     fG = feld("Generalschlüssel", p && p.gen ? p.gen : "", null, "numeric"), fT1 = feld("Hütte Tür 1", p && p.t1 ? p.t1 : "", null, "numeric"), fT2 = feld("Hütte Tür 2", p && p.t2 ? p.t2 : "", null, "numeric"),
     fS = feld("Sonstige", p && p.sonst, "w2"), fB = feld("Bestätigt am/von", p ? p.best : "", null), fA = feld("Austritt am/von", p ? p.aus : "", null), fBe = feld("Bemerkung", p && p.bem, "w2");
   fB._i.placeholder = "z. B. 23.11.2026 Vorname"; fA._i.placeholder = "z. B. 23.11.2026 Vorname";
+  /* Neuer Eintrag: „Bestätigt“ mit heutigem Datum und dem Namen des angemeldeten Kontos vorbelegen (änderbar). */
+  if(!p){ var hd = new Date(), wer = TEST ? "Testmodus" : (konto && (konto.name || konto.username) || "");
+    fB._i.value = ("0" + hd.getDate()).slice(-2) + "." + ("0" + (hd.getMonth() + 1)).slice(-2) + "." + hd.getFullYear() + (wer ? " " + wer : ""); }
   var lS = add(el("label", "fld", "Status"), sel);
   var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
   add(f, el("h2", null, p ? "Schlüsselträger ändern" : "Neuer Schlüsselträger"), add(el("div", "formular"), fN, fV, fF, lS, fG, fT1, fT2, fS, fB, fA, fBe),
