@@ -122,6 +122,7 @@ var DATEINAME = "";
    Hinweis: Das gilt im Portal. Wer in Teams Bearbeitungsrechte auf die Excel hat, kann dort weiterhin direkt ändern. */
 var RECHTE = {
   verwaltung: ["d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75"],
+  schluessel: ["d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75", "455bdf6f964ab3b74b48e2134d5b643d8a987537d691396adb6a06c5425b7477"],
   teamwear: ["b9653028cf8b498aa3747d9fa3f8e64e50073f7de9fa4b5b8d36f642ef9256bc", "d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75"]
 };
 var kontoHash = "";
@@ -138,10 +139,10 @@ function kontoSetzen(acc){
     kontoHash = Array.prototype.map.call(new Uint8Array(h), function(b){ return ("0" + b.toString(16)).slice(-2); }).join(""); }).catch(function(){});
 }
 function darf(bereich){
-  if(TEST){ var rolle = (/[?&]rolle=([a-z]+)/.exec(location.search) || [])[1] || "verwaltung"; return rolle === bereich; }
+  if(TEST){ var rolle = (/[?&]rolle=([a-z]+)/.exec(location.search) || [])[1] || "verwaltung"; return rolle === bereich || (rolle === "verwaltung" && bereich === "schluessel"); }
   return !!konto && !!kontoHash && (RECHTE[bereich] || []).indexOf(kontoHash) > -1;
 }
-function nurLesenHinweis(bereich){ return el("div", "hinweis", bereich === "teamwear" ? "Du kannst hier nur lesen. Abhaken kann nur der Teamwear-Verantwortliche." : "Du kannst hier nur lesen. Eintragen kann nur die Verwaltung – bitte Änderungen dort melden."); }
+function nurLesenHinweis(bereich){ return el("div", "hinweis", bereich === "teamwear" ? "Du kannst hier nur lesen. Abhaken kann nur der Teamwear-Verantwortliche." : bereich === "schluessel" ? "Du kannst hier nur lesen. Schlüssel eintragen können nur die Zuständigen – bitte Änderungen dort melden." : "Du kannst hier nur lesen. Eintragen kann nur die Verwaltung – bitte Änderungen dort melden."); }
 /* Gibt true zurück und zeigt einen Hinweis, wenn nicht geschrieben werden darf (Sperre oder fehlendes Recht). */
 function gesperrt(f, bereich){
   bereich = bereich || "verwaltung";
@@ -565,8 +566,8 @@ function seiteSchluessel(s){
     s.textContent = "";
     var w = D.blaetter[BLATT.schluessel]; if(!w){ add(s, el("div", "fehler", "Das Blatt „Schlüsselliste“ fehlt in der Excel.")); return; }
     var leute = schluessel(w), farben = typen(D.blaetter[BLATT.typen] || []);
-    var schreibt = darf("verwaltung");
-    add(s, el("h1", null, "Schlüssel"), schreibt ? el("p", "lead", "Schlüsselträger ändern oder neu anlegen. Die Bestandsübersicht rechnet die Excel selbst.") : nurLesenHinweis("verwaltung"));
+    var schreibt = darf("schluessel");
+    add(s, el("h1", null, "Schlüssel"), schreibt ? el("p", "lead", "Schlüsselträger ändern oder neu anlegen. Die Bestandsübersicht rechnet die Excel selbst.") : nurLesenHinweis("schluessel"));
     if(schreibt) add(s, add(el("div", "reihe"), btn("primary", "+ Neuer Schlüsselträger", function(){ schluesselBearbeiten(null, leute); })));
     /* Bestandsübersicht aus N–Q. Nur Zeilen mit mindestens einer Zahl und nur Spalten, in denen etwas steht
        (in der Excel ist der Bestand noch nicht gepflegt, dann bleibt nur „Im Umlauf“). */
@@ -632,7 +633,7 @@ function schluesselBearbeiten(p, leute){
   add(f, el("h2", null, p ? "Schlüsselträger ändern" : "Neuer Schlüsselträger"), add(el("div", "formular"), fN, fV, fF, lS, fG, fT1, fT2, fS, fB, fA, fBe),
     add(el("div", "reihe"), ok, btn("", "Abbrechen", function(){ d.close(); d.remove(); })));
   add(d, f); document.body.appendChild(d); d.showModal(); fN._i.focus();
-  f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f)) return;
+  f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f, "schluessel")) return;
     var nn = fN._i.value.trim(), vn = fV._i.value.trim(); if(!nn && !vn){ zeigeToast("Bitte einen Namen eintragen."); return; }
     function wert(l, zahlFeld){ var v = l._i.value.trim(); if(p && v === String(l._i._alt).trim()) return null; if(!v) return ""; if(zahlFeld){ var n = eingabeZahl(v); return n == null ? "" : n; } return v; }
     ok.disabled = true;
