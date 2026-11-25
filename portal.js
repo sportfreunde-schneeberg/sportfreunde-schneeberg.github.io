@@ -1428,7 +1428,7 @@ var VaTest = {
     if(it && /weihnacht/i.test(it.name)){ if(!VaTest.dienste){ var j0 = new Date().getFullYear(), tag = datumZuSerie(new Date(j0, 11, 19));
         VaTest.dienste = [["Dienstplan Weihnachtsfeier (Beispieldaten)"], ["Veranstaltung", "Weihnachtsfeier " + j0, "Datum", tag, "Beginn", "14:00", "Öffentlich buchbar", "Ja"], ["Hinweis"], ["ID", "Bereich", "Datum", "Von", "Bis", "Platz", "Name", "E-Mail", "Telefon", "Quelle", "Eingetragen am", "Bemerkung"]];
         [["Aufbau", tag - 1, "", 2], ["Getränkestand", tag, "14:00", 2], ["Essensstand", tag, "14:00", 3], ["Abbau", tag + 1, "", 2]].forEach(function(x){ for(var p = 1; p <= x[3]; p++){ var n = VaTest.dienste.length - 3;
-          VaTest.dienste.push(["T-" + (n < 10 ? "0" : "") + n, x[0], x[1], x[2], "", p, x[0] === "Getränkestand" && p === 1 ? "Person A" : "", "", "", x[0] === "Getränkestand" && p === 1 ? "intern" : "", "", p === 1 && !x[2] ? "Zeit Vorschlag" : ""]); } }); }
+          VaTest.dienste.push(["T-" + (n < 10 ? "0" : "") + n, x[0], x[1], x[2], "", p, x[0] === "Getränkestand" && p === 1 ? "Person A" : (x[0] === "Essensstand" && p < 3 ? "Person " + (p === 1 ? "B" : "C") : ""), "", "", x[0] === "Getränkestand" && p === 1 ? "intern" : (x[0] === "Essensstand" && p < 3 ? "Formular" : ""), x[0] === "Essensstand" && p < 3 ? datumZuSerie(new Date()) + 0.4 : "", p === 1 && !x[2] ? "Zeit Vorschlag" : ""]); } }); }
       return Promise.resolve({name: "Dienste", werte: JSON.parse(JSON.stringify(VaTest.dienste))}); }
     return Promise.resolve({name: "Dienstplan", werte: [["Dienstplan (Beispieldaten)", "", ""], ["Zeit", "Theke", "Kasse"], ["14–16 Uhr", "Person A", "Person B"], ["16–18 Uhr", "Person C", "Person D"]]}); },
   schreiben: function(id, blatt, adresse, werte){ window.__tombola = (window.__tombola || []).concat([{blatt: blatt, adresse: adresse, werte: werte}]); return Test.schreibenIn(blatt === "Dienste" ? VaTest.dienste : VaTest.tombola, blatt, adresse, werte); },
@@ -1884,6 +1884,7 @@ function tagText(v){ if(typeof v !== "number") return txt(v); return WT[serieZuD
 function dienstZeit(z){ var a = txt(z.von), b = txt(z.bis); return a && b ? a + "–" + b + " Uhr" : (a ? "ab " + a + " Uhr" : (b ? "bis " + b + " Uhr" : "Zeit offen")); }
 function dienstEditor(d, b){
   var box = el("div"), sum = el("div", "summe"), zeilen = dienstZeilen(b.werte), liste = el("div"), blatt = b.name;
+  var spamBox = el("div", "reihe");
   var buchbar = /^ja/i.test(txt(zelle(b.werte, 2, 7)));
   var ex = el("a", null, "In Excel öffnen"); ex.href = d.webUrl; ex.target = "_blank"; ex.rel = "noopener";
   var pub = el("a", null, "Öffentliche Seite „Dienste buchen“"); pub.href = "/dienste/"; pub.target = "_blank"; pub.rel = "noopener";
@@ -1893,9 +1894,20 @@ function dienstEditor(d, b){
     VAQ().schreiben(d.id, blatt, "H2", [[neu ? "Ja" : "Nein"]]).then(function(){ buchbar = neu; zeigeToast(neu ? "Öffentlich buchbar ✓ (erscheint mit dem nächsten Abgleich)" : "Nicht mehr öffentlich buchbar"); })
       .catch(function(e){ cb.checked = !neu; zeigeToast(e && e.status ? vaFehler(e) : "Speichern hat nicht geklappt."); }).then(function(){ cb.disabled = false; }); });
   add(box, add(el("p", "lead"), "Platz antippen, um jemanden einzutragen oder den Platz wieder freizugeben. Freie Plätze können Externe über die öffentliche Seite buchen (Microsoft Forms); die Buchung landet automatisch hier. ", ex, " · ", pub),
-    schalter, sum, liste);
+    schalter, sum, spamBox, liste);
+  /* Spam/Fehlbuchungen: alle Buchungen über das Formular von heute auf einmal löschen (je Zeile frisch geprüft). */
+  function heuteFormular(){ var h = new Date(), t = pad(h.getDate()) + "." + pad(h.getMonth() + 1) + "." + h.getFullYear(), serie = datumZuSerie(h);
+    return zeilen.filter(function(z){ return txt(z.name) && txt(z.quelle) === "Formular" && (typeof z.am === "number" ? Math.floor(z.am) === serie : txt(z.am).indexOf(t) === 0); }); }
+  function spamKnopf(){ spamBox.textContent = ""; var l = heuteFormular(); if(!l.length) return;
+    var b = btn("gefahr", "Heutige Formular-Buchungen löschen (" + l.length + ")", function(){
+      if(!confirm(l.length + " Buchung(en) von heute über das Formular löschen?\n" + l.map(function(z){ return "– " + txt(z.name) + " (" + txt(z.bereich) + ")"; }).join("\n") + "\n\nNur bei Spam oder Fehlbuchungen. Es gehen keine Mails raus.")) return;
+      b.disabled = true; var i = 0;
+      (function weiter(){ if(i >= l.length){ zeigeToast(l.length + " Buchung(en) gelöscht ✓"); return; } var z = l[i++];
+        speichern(z, ["", "", "", "", ""]).then(weiter, function(){ b.disabled = false; }); })(); });
+    add(spamBox, b, el("span", "grau", " Bei Spam zusätzlich oben „Freie Plätze öffentlich buchbar“ ausschalten.")); }
   function zeigen(){ liste.textContent = ""; sum.textContent = "";
     var belegt = zeilen.filter(function(z){ return txt(z.name); }).length;
+    spamKnopf();
     add(sum, add(el("span"), "Plätze ", el("b", null, String(zeilen.length))), add(el("span"), "besetzt ", el("b", null, String(belegt))), add(el("span"), "frei ", el("b", null, String(zeilen.length - belegt))));
     var t = el("table", "matrix dp"), k = el("tr"); add(k, el("th", null, "Platz"), el("th", null, "Wer"), el("th", "breit", "Eingetragen"), el("th", "pf")); add(t, add(el("thead"), k));
     var tb = el("tbody"), gruppe = null;
@@ -1917,7 +1929,7 @@ function dienstEditor(d, b){
         var jetzt = txt(zelle(b2.werte, z.zeile, 6));
         if(nurWennFrei && jetzt && jetzt !== txt(z.name)) throw new Error("Dieser Platz wurde inzwischen vergeben (" + jetzt + "). Bitte die Seite neu laden.");
         return VAQ().schreiben(d.id, b2.name, "G" + z.zeile + ":K" + z.zeile, [werte]); })
-      .then(function(){ ["name", "mail", "tel", "quelle", "am"].forEach(function(k, i){ z[k] = werte[i]; }); zeigen(); zeigeToast(werte[0] ? werte[0] + " eingetragen ✓" : "Platz freigegeben ✓"); })
+      .then(function(){ ["name", "mail", "tel", "quelle", "am"].forEach(function(k, i){ z[k] = werte[i]; }); zeigen(); zeigeToast(werte[0] ? werte[0] + " eingetragen ✓" : "Buchung gelöscht, Platz frei ✓"); })
       .catch(function(e){ zeigeToast(e && e.status ? vaFehler(e) : (e.message || "Speichern hat nicht geklappt.")); throw e; }); }
   function dialog(z){
     var dl = el("dialog"), f = el("form", "karte"); f.noValidate = true;
@@ -1925,14 +1937,14 @@ function dienstEditor(d, b){
     function eingabe(v, typ, ph){ var i = el("input"); i.type = typ || "text"; i.value = v == null ? "" : v; if(ph) i.placeholder = ph; return i; }
     var e = {name: eingabe(txt(z.name), "text", "Vor- und Nachname"), mail: eingabe(txt(z.mail), "email", "optional"), tel: eingabe(txt(z.tel), "tel", "optional")};
     var ok = el("button", "btn primary", "Speichern"); ok.type = "submit";
-    var frei = txt(z.name) ? btn("", "Platz freigeben", function(){ if(!confirm("Platz wieder freigeben? " + txt(z.name) + " wird ausgetragen.")) return; frei.disabled = true;
+    var frei = txt(z.name) ? btn("gefahr", "Buchung löschen", function(){ if(!confirm("Buchung löschen und Platz wieder freigeben?\n" + txt(z.name) + " wird ausgetragen. Eine Mail geht dabei nicht raus.")) return; frei.disabled = true;
       speichern(z, ["", "", "", "", ""]).then(function(){ dl.close(); dl.remove(); }).catch(function(){ frei.disabled = false; }); }) : null;
     add(f, el("h2", null, txt(z.bereich) + " · Platz " + txt(z.platz)), el("p", "lead", tagText(z.datum) + " · " + dienstZeit(z) + (txt(z.bem) ? " · " + txt(z.bem) : "")),
       add(el("div", "formular"), feld("Name", e.name, "w2"), feld("E-Mail", e.mail), feld("Telefon", e.tel)),
       add(el("div", "reihe"), ok, frei, btn("", "Abbrechen", function(){ dl.close(); dl.remove(); })));
     add(dl, f); document.body.appendChild(dl); dl.showModal(); e.name.focus();
     f.addEventListener("submit", function(ev){ ev.preventDefault(); var n = e.name.value.trim();
-      if(!n){ zeigeToast("Bitte einen Namen eintragen – oder „Platz freigeben“."); return; }
+      if(!n){ zeigeToast("Bitte einen Namen eintragen – oder „Buchung löschen“."); return; }
       var neu = !txt(z.name), am = neu ? datumZuSerie(new Date()) + (new Date().getHours() * 60 + new Date().getMinutes()) / 1440 : z.am;
       ok.disabled = true;
       speichern(z, [n, e.mail.value.trim(), e.tel.value.trim(), neu ? "intern" : (txt(z.quelle) || "intern"), am == null ? "" : am], neu)
