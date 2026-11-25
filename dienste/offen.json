@@ -1,5 +1,5 @@
 {
- "stand": "2026-11-25T11:00+01:00",
+ "stand": "2026-11-25T11:35+01:00",
  "veranstaltungen": [
   {
    "name": "Weihnachtsfeier 2026",
@@ -12,6 +12,7 @@
      "von": "",
      "bis": "",
      "hinweis": "",
+     "plaetze": 4,
      "ids": [
       "WF26-03",
       "WF26-04"
@@ -23,6 +24,7 @@
      "von": "",
      "bis": "",
      "hinweis": "",
+     "plaetze": 4,
      "ids": [
       "WF26-05",
       "WF26-06",
@@ -36,6 +38,7 @@
      "von": "14:00",
      "bis": "",
      "hinweis": "",
+     "plaetze": 6,
      "ids": [
       "WF26-11",
       "WF26-12",
@@ -51,6 +54,7 @@
      "von": "14:00",
      "bis": "",
      "hinweis": "",
+     "plaetze": 2,
      "ids": [
       "WF26-09",
       "WF26-10"
@@ -62,6 +66,7 @@
      "von": "",
      "bis": "",
      "hinweis": "",
+     "plaetze": 4,
      "ids": [
       "WF26-17",
       "WF26-18",
