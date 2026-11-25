@@ -117,7 +117,8 @@ function zeigen(d){
       was.appendChild(el("b", null, x.bereich)); was.appendChild(el("small", null, tag(x.datum) + " · " + zeit(x) + (x.hinweis ? " · " + x.hinweis : "")));
       var a = el("a", "btn", "Buchen"); a.href = "#"; a.setAttribute("aria-label", x.bereich + " am " + tag(x.datum) + " buchen");
       a.addEventListener("click", function(ev){ ev.preventDefault(); if(!pruefen()) return; window.open(link(v, x), "_blank", "noopener"); });
-      row.appendChild(was); row.appendChild(el("span", "frei" + (x.ids.length < 2 ? " knapp" : ""), x.ids.length === 1 ? "noch 1 Platz frei" : "noch " + x.ids.length + " Plätze frei")); row.appendChild(a);
+      row.appendChild(was); var n = x.ids.length, ges = Math.max(x.plaetze || 0, n);
+      row.appendChild(el("span", "frei" + (n < 2 ? " knapp" : ""), n + " von " + ges + " frei")); row.appendChild(a);
       sec.appendChild(row); });
     liste.appendChild(sec); });
   var s = d.stand ? new Date(d.stand) : null;
