@@ -684,7 +684,8 @@ function schluesselBearbeiten(p, leute){
 /* --- Karte ---
    Wie die Karte der früheren iPhone-App: Lagerorte (Blatt „Lagerorte“), Schlösser (Blatt „Schlösser“) und Kameras (Blatt „Kameras“)
    mit Lat/Lng aus der Excel. Kartenbibliothek Leaflet (cdnjs, mit Prüfsumme), Karten von OpenStreetMap (kostenlos, mit Namensnennung).
-   Bewässerung fehlt bewusst: dort stehen noch Platzhalter-Koordinaten. Texte aus der Excel nur als Text einsetzen, nie als HTML. */
+   Lagerorte ohne Lat/Lng (z. B. „Allgemein“, „Alter Sportplatz“ – dort lagert nichts) erscheinen nicht. Kameras ohne Stream zeigen im Popup
+   das Beispielbild (kameraBeispiel). Bewässerung fehlt bewusst: dort stehen noch Platzhalter-Koordinaten. Texte aus der Excel nur als Text einsetzen, nie als HTML. */
 var GELAENDE = [49.63965, 9.25335], gelaendeZoom = function(){ return window.innerWidth < 600 ? 17 : 18; }, KARTE_ARTEN = {ort: true, schloss: true, kamera: true};
 function leafletLaden(){
   if(window.L) return Promise.resolve(window.L);
@@ -736,7 +737,10 @@ function seiteKarte(s){
         if(f){ var akt = leute.filter(function(x){ return /^aktiv/i.test(x.status) && x[f] > 0; }); add(d, el("div", null, "Schlüssel „" + p.x.typ + "“ bei " + akt.length + " aktiven Schlüsselträgern")); }
         if(p.x.bem) add(d, el("div", "grau", p.x.bem));
         var a2 = el("a", null, "Zur Schlüsselliste ›"); a2.href = "#/verwaltung/schluessel"; add(d, a2); }
-      if(p.art === "kamera"){ add(d, el("div", null, p.stream ? "Stream eingetragen" : "Noch nicht verbunden (keine Stream-Adresse)")); if(p.bem) add(d, el("div", "grau", p.bem)); }
+      if(p.art === "kamera"){ add(d, el("div", null, p.stream ? "Stream eingetragen" : "Noch nicht verbunden (keine Stream-Adresse)"));
+        if(!p.stream && ANLAGEN_SCHLUESSEL[p.unter]){ add(d, add(el("div", "kpop-bild"), kameraBeispiel(p.unter)));
+          var a3 = el("a", null, "Zur Bewässerungssteuerung ›"); a3.href = "#/verwaltung/bewaesserung/" + ANLAGEN_SCHLUESSEL[p.unter]; add(d, a3); }
+        else if(p.bem) add(d, el("div", "grau", p.bem)); }
       return d; }
     function zeichnen(){ ebene.clearLayers();
       sichtbar().forEach(function(p){ var sym = {ort: "📦", schloss: "🔑", kamera: "📷"}[p.art];
@@ -2186,7 +2190,7 @@ function mannschaftenHomepage(s, M){
  * GET <Basis-URL>/druck. Es läuft immer nur ein Regner; nach dem Ausschalten 10 s Sperre. Jedes Einschalten
  * schickt eine Maximaldauer mit. Programme laufen im Browser nur, solange die Seite offen ist.
  * Solange keine Basis-URL eingetragen ist, ist die Steuerung sichtbar, aber ausgegraut. */
-var ANLAGEN = {alt: "Alter Sportplatz", neu: "Neuer Sportplatz"};
+var ANLAGEN = {alt: "Alter Sportplatz", neu: "Neuer Sportplatz"}, ANLAGEN_SCHLUESSEL = {"Alter Sportplatz": "alt", "Neuer Sportplatz": "neu"};
 var BW_SPERRE = 10;
 var BW_PROGRAMME_VORGABE = [ /* laut Anleitung, solange das Blatt „Bewässerung Programme“ leer ist */
   {kennung: "A", name: "Langes Programm", dauern: [90, 90, 60, 60, 60, 60, 60, 75, 75]},
@@ -2204,10 +2208,9 @@ function bwLaden(){
     for(z = ERSTE; z <= b[3].length; z++){ var k = txt(zelle(b[3], z, 2)), an = txt(zelle(b[3], z, 1)); if(!k) continue; var id = an + "|" + k;
       (prog[id] = prog[id] || {anlage: an, kennung: k, name: txt(zelle(b[3], z, 3)), schritte: []}).schritte.push({regner: txt(zelle(b[3], z, 4)), dauer: zahl(zelle(b[3], z, 5)) || 0}); }
     /* Vorgaben wie in der App, falls Blätter fehlen */
-    if(!kameras.length) kameras = [{name: "Kamera Alter Sportplatz Nord", anlage: ANLAGEN.alt, url: "", typ: "HLS"}, {name: "Kamera Alter Sportplatz Süd", anlage: ANLAGEN.alt, url: "", typ: "HLS"},
-      {name: "Kamera Neuer Sportplatz Nord", anlage: ANLAGEN.neu, url: "", typ: "HLS"}, {name: "Kamera Neuer Sportplatz Süd", anlage: ANLAGEN.neu, url: "", typ: "HLS"}];
-    if(!anlagen.length) anlagen = [{anlage: ANLAGEN.alt, basis: "", kamera: "Kamera Alter Sportplatz Süd", modi: false, bem: "Ein Ventil, nur ein und aus", soll: 7.5},
-      {anlage: ANLAGEN.neu, basis: "", kamera: "Kamera Neuer Sportplatz Nord", modi: true, bem: "Mehrere Regner, Reihenfolge und Dauer", soll: 8}];
+    if(!kameras.length) kameras = [{name: "Kamera Alter Sportplatz", anlage: ANLAGEN.alt, url: "", typ: "HLS"}, {name: "Kamera Neuer Sportplatz", anlage: ANLAGEN.neu, url: "", typ: "HLS"}]; /* eine Kamera je Sportplatz */
+    if(!anlagen.length) anlagen = [{anlage: ANLAGEN.alt, basis: "", kamera: "Kamera Alter Sportplatz", modi: false, bem: "Ein Ventil, nur ein und aus", soll: 7.5},
+      {anlage: ANLAGEN.neu, basis: "", kamera: "Kamera Neuer Sportplatz", modi: true, bem: "Mehrere Regner, Reihenfolge und Dauer", soll: 8}];
     if(!regner.length){ regner.push({anlage: ANLAGEN.alt, name: "Beregnung gesamt", ein: "/ventil/1/ein", aus: "/ventil/1/aus", folge: 1, dauer: 20, soll: 7.5});
       for(var i = 1; i <= 9; i++) regner.push({anlage: ANLAGEN.neu, name: "Regner " + i, ein: "/ventil/" + i + "/ein", aus: "/ventil/" + i + "/aus", folge: i, dauer: 15, soll: i <= 3 ? 9 : 8}); }
     var programme = Object.keys(prog).map(function(k){ return prog[k]; }), vorgabe = false;
@@ -2251,6 +2254,54 @@ function bwProgramm(an, prog, liste, neuZeichnen){
     .catch(function(e){ BW.fehler = e.message; })
     .then(function(){ if(BW.programm === P) BW.programm = null; if(!P.stop) BW.meldung = "Programm " + prog.kennung + " beendet."; neuZeichnen(); });
 }
+/* Beispielbild, solange es keine echte Kamera gibt (je Sportplatz eine Kamera geplant): gezeichnete, animierte Szene,
+   kein Foto. Alter Sportplatz mit Blick von der Vereinsstraße (Sportheim im Hintergrund), neuer Sportplatz mit Blick
+   von der Winterhelle (Hütten im Hintergrund). Zwei Kinder spielen sich den Ball zu, die Regner laufen. Fester Inhalt, keine Excel-Texte. */
+var KAMERA_BLICK = {"Alter Sportplatz": "Vereinsstraße", "Neuer Sportplatz": "Winterhelle"};
+function kameraBeispiel(anlage){
+  var n = (kameraBeispiel.n = (kameraBeispiel.n || 0) + 1), alt = anlage === ANLAGEN.alt, blick = KAMERA_BLICK[anlage] || "";
+  function kind(x, y, sk, trikot, hose, spiegel, verz){
+    return '<g transform="translate(' + x + ' ' + y + ') scale(' + (spiegel ? -sk : sk) + ' ' + sk + ')">' +
+      '<ellipse cx="0" cy="1" rx="14" ry="3.5" fill="rgba(0,0,0,.18)"/>' +
+      '<line x1="-3" y1="-30" x2="-6" y2="0" stroke="#3b2a1d" stroke-width="5" stroke-linecap="round"/>' +
+      '<g transform="translate(3 -30)"><g class="ks-kick" style="animation-delay:' + verz + 's"><line x1="0" y1="0" x2="2" y2="30" stroke="#3b2a1d" stroke-width="5" stroke-linecap="round"/><ellipse cx="4" cy="30" rx="5" ry="2.6" fill="#111"/></g></g>' +
+      '<rect x="-9" y="-36" width="18" height="9" rx="2" fill="' + hose + '"/>' +
+      '<rect x="-10" y="-60" width="20" height="26" rx="5" fill="' + trikot + '"/>' +
+      '<line x1="-9" y1="-56" x2="-16" y2="-40" stroke="#f1c27d" stroke-width="4" stroke-linecap="round"/><line x1="9" y1="-56" x2="16" y2="-41" stroke="#f1c27d" stroke-width="4" stroke-linecap="round"/>' +
+      '<circle cx="0" cy="-69" r="9" fill="#f1c27d"/><path d="M-9 -71 Q0 -82 9 -71 Q4 -76 -9 -71z" fill="#5b3a1e"/></g>'; }
+  function regner(x, y, sk, verz){
+    var strahl = ""; for(var i = 0; i < 4; i++) strahl += '<path class="ks-wasser" style="animation-delay:-' + (i * .25) + 's" d="M0 -10 Q ' + (30 + i * 14) + ' ' + (-52 - i * 6) + ' ' + (60 + i * 26) + ' ' + (-2 + i * 3) + '"/>';
+    return '<g transform="translate(' + x + ' ' + y + ') scale(' + sk + ')"><ellipse cx="40" cy="2" rx="70" ry="10" fill="rgba(120,180,230,.18)"/>' +
+      '<rect x="-2.5" y="-12" width="5" height="12" fill="#5d6b63"/><g class="ks-schwenk" style="animation-delay:-' + verz + 's">' + strahl + '</g></g>'; }
+  var hinten = alt
+    ? '<rect x="18" y="70" width="190" height="78" fill="#efe3c8"/><path d="M8 72 L113 30 L218 72z" fill="#9b4a2c"/>' +
+      '<rect x="36" y="92" width="28" height="22" fill="#9cc3dc"/><rect x="80" y="92" width="28" height="22" fill="#9cc3dc"/><rect x="124" y="92" width="28" height="22" fill="#9cc3dc"/><rect x="168" y="96" width="22" height="52" fill="#7a5235"/>' +
+      '<rect x="60" y="76" width="106" height="13" rx="2" fill="#1f4d2e"/><text x="113" y="86" font-size="9.5" font-weight="700" fill="#fff" text-anchor="middle" font-family="system-ui,sans-serif">SPORTHEIM</text>'
+    : '<rect x="452" y="96" width="70" height="50" fill="#8a5a35"/><path d="M444 98 L487 70 L530 98z" fill="#5e3b22"/><rect x="478" y="116" width="18" height="30" fill="#5e3b22"/>' +
+      '<rect x="540" y="104" width="60" height="42" fill="#956441"/><path d="M533 106 L570 82 L607 106z" fill="#6a4429"/><rect x="560" y="122" width="16" height="24" fill="#6a4429"/>' +
+      '<rect x="40" y="108" width="48" height="38" fill="#e9e2d6"/><path d="M34 110 L64 88 L94 110z" fill="#a0533a"/>';
+  var regnerHtml = alt ? regner(470, 318, 1, 0) : regner(140, 262, .8, .4) + regner(452, 236, .7, 1.1) + regner(300, 186, .5, 1.8);
+  var svg = '<svg class="ks" viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Beispielbild ' + anlage + ': zwei Kinder spielen Fußball, die Regner laufen">' +
+    '<defs><linearGradient id="ksH' + n + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd0f0"/><stop offset="1" stop-color="#e3f1f7"/></linearGradient></defs>' +
+    '<rect width="640" height="160" fill="url(#ksH' + n + ')"/>' +
+    '<path d="M0 122 Q120 92 250 112 T520 104 T640 110 V160 H0z" fill="#7da776"/>' +
+    '<g fill="#3f6e3c"><circle cx="250" cy="118" r="20"/><circle cx="282" cy="112" r="24"/><circle cx="330" cy="120" r="18"/><circle cx="380" cy="114" r="22"/><circle cx="612" cy="116" r="22"/><circle cx="430" cy="124" r="15"/></g>' +
+    hinten +
+    '<path d="M0 146 H640 V360 H0z" fill="#4f8f3f"/>' +
+    '<path d="M110 150 L530 150 L700 360 L-60 360z" fill="#5aa046"/>' +
+    '<g fill="#63ab4e"><path d="M104 158 L536 158 L548 172 L92 172z"/><path d="M80 188 L560 188 L578 210 L62 210z"/><path d="M44 236 L596 236 L622 268 L18 268z"/><path d="M-6 300 L646 300 L682 344 L-42 344z"/></g>' +
+    '<g fill="none" stroke="#fff" stroke-width="2.2" opacity=".9"><path d="M110 150 L530 150 L700 360 M110 150 L-60 360"/><path d="M228 150 L222 172 L418 172 L412 150"/>' +
+    '<path d="M-20 312 L660 312"/><ellipse cx="320" cy="312" rx="92" ry="22"/></g>' +
+    '<g stroke="#fff" stroke-width="3" fill="none"><path d="M292 150 V128 H348 V150"/></g><path d="M294 130 H346 V149 H294z" fill="rgba(255,255,255,.25)"/>' +
+    '<line x1="0" y1="146" x2="640" y2="146" stroke="#d9d4c4" stroke-width="3"/>' +
+    regnerHtml +
+    kind(236, 300, 1, "#1f4d2e", "#fff", false, 0) + kind(430, 238, .78, "#e6b422", "#1f4d2e", true, 1.2) +
+    '<circle r="6.5" fill="#fff" stroke="#222" stroke-width="1.4"><animateMotion dur="2.4s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear" path="M246 298 Q338 180 422 236"/></circle>' +
+    '<g font-family="system-ui,-apple-system,sans-serif" font-weight="700"><rect x="10" y="10" rx="6" width="' + (blick ? 330 : 200) + '" height="26" fill="rgba(10,20,14,.72)"/>' +
+    '<text x="22" y="28" font-size="13" fill="#fff">BEISPIELBILD' + (blick ? ' · Blick von der ' + blick : '') + '</text>' +
+    '<rect x="508" y="10" rx="6" width="122" height="26" fill="rgba(230,180,34,.92)"/><text x="569" y="28" font-size="13" fill="#1b1b1b" text-anchor="middle">Kamera folgt</text></g></svg>';
+  var d = el("div", "ks-rahmen"); d.innerHTML = svg; return d;
+}
 function seiteBewaesserung(s, platz){
   if(!platz){
     pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Bewässerungssteuerung"]]);
@@ -2278,7 +2329,8 @@ function seiteBewaesserung(s, platz){
       if(kams.length > 1){ var w = el("select"); kams.forEach(function(k){ var o = el("option", null, k.name); o.value = k.name; add(w, o); }); w.value = kam ? kam.name : "";
         w.addEventListener("change", function(){ kam = kams.filter(function(k){ return k.name === w.value; })[0]; kameraZeigen(); }); add(links, w); }
       var bild = el("div", "bw-bild"); add(links, bild);
-      if(!kam || !kam.url){ add(bild, el("span", null, "Noch keine Kamera eingetragen. Sobald sie hängt: Adresse in der Liegenschaften-Excel, Blatt „Kameras“, Spalte F (Stream-URL), Spalte G Typ HLS, MJPEG oder Web.")); return; }
+      if(!kam || !kam.url){ add(bild, kameraBeispiel(name));
+        add(links, el("p", "grau", "Beispielbild – die Kamera gibt es noch nicht. Sobald sie hängt: Adresse in der Liegenschaften-Excel, Blatt „Kameras“, Spalte F (Stream-URL), Spalte G Typ HLS, MJPEG oder Web.")); return; }
       if(/^http:/i.test(kam.url) && location.protocol === "https:"){ add(bild, el("span", null, "Die Kamera-Adresse beginnt mit http://. Das Portal läuft über https und der Browser blockiert sie – die Kamera braucht eine https-Adresse.")); return; }
       if(kam.typ === "MJPEG"){ var img = el("img"); img.alt = kam.name; img.src = kam.url; add(bild, img); }
       else if(kam.typ === "WEB"){ var fr = el("iframe"); fr.src = kam.url; fr.title = kam.name; add(bild, fr); }
