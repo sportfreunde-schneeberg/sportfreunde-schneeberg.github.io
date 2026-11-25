@@ -1,0 +1,77 @@
+{
+ "stand": "2026-11-25T09:13+01:00",
+ "veranstaltungen": [
+  {
+   "name": "Weihnachtsfeier 2026",
+   "datum": "2026-12-19",
+   "beginn": "14:00",
+   "dienste": [
+    {
+     "bereich": "Aufbau Zelt (Essen)",
+     "datum": "2026-12-12",
+     "von": "",
+     "bis": "",
+     "hinweis": "",
+     "ids": [
+      "WF26-01",
+      "WF26-02",
+      "WF26-03",
+      "WF26-04"
+     ]
+    },
+    {
+     "bereich": "Aufbau",
+     "datum": "2026-12-18",
+     "von": "",
+     "bis": "",
+     "hinweis": "",
+     "ids": [
+      "WF26-05",
+      "WF26-06",
+      "WF26-07",
+      "WF26-08"
+     ]
+    },
+    {
+     "bereich": "Essensstand",
+     "datum": "2026-12-19",
+     "von": "14:00",
+     "bis": "",
+     "hinweis": "",
+     "ids": [
+      "WF26-11",
+      "WF26-12",
+      "WF26-13",
+      "WF26-14",
+      "WF26-15",
+      "WF26-16"
+     ]
+    },
+    {
+     "bereich": "Getränkestand",
+     "datum": "2026-12-19",
+     "von": "14:00",
+     "bis": "",
+     "hinweis": "",
+     "ids": [
+      "WF26-09",
+      "WF26-10"
+     ]
+    },
+    {
+     "bereich": "Abbau",
+     "datum": "2026-12-20",
+     "von": "",
+     "bis": "",
+     "hinweis": "",
+     "ids": [
+      "WF26-17",
+      "WF26-18",
+      "WF26-19",
+      "WF26-20"
+     ]
+    }
+   ]
+  }
+ ]
+}
