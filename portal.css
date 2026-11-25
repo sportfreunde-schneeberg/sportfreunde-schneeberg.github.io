@@ -438,3 +438,18 @@ span.haken{cursor:default}
 .kz.ist .kz-name,.kz.ist .kz-wert{color:var(--ink);font-weight:800}
 .kasse-fuss{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;font-size:13.5px}
 @media (max-width:560px){.kz{grid-template-columns:16px 1fr auto;row-gap:4px}.kz-bahn{grid-column:2 / 4;grid-row:2}.kasse-ist b{font-size:22px}}
+
+/* Karte (Liegenschaften) */
+.karte-map{height:min(70vh,620px);min-height:360px;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:6px 0 10px;background:var(--sunken)}
+.kfilter .btn{min-height:38px;padding:6px 12px;font-size:14px}
+.kfilter .btn.an{background:var(--green);border-color:var(--green);color:#fff}
+.kpin-h{background:none;border:0}
+.kpin{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);font-size:13px;line-height:1}
+.kpin.ort{border-radius:7px}
+.kpop{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#16241b;min-width:180px}
+.kpop b{display:block;font-size:15px}
+.kpop .grau{color:#5a6a60}
+.kpop ul{margin:4px 0 6px;padding-left:18px}
+.kpop a{display:inline-block;margin-top:6px;color:#1f4d2e;font-weight:600}
+.kleg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px;align-items:center;margin-bottom:16px}
+.kleg > span{display:inline-flex;align-items:center;gap:5px}

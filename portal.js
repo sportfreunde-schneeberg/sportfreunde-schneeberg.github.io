@@ -230,7 +230,7 @@ function schluessel(w){ var out = []; for(var z = ERSTE; z <= w.length; z++){ va
     sonst: txt(zelle(w, z, 8)), best: datumText(zelle(w, z, 9)), aus: datumText(zelle(w, z, 10)), bem: txt(zelle(w, z, 11))}); }
   return out; }
 function schloesser(w){ var out = []; for(var z = ERSTE; z <= w.length; z++){ var t = txt(zelle(w, z, 2)); if(!t) continue;
-  out.push({standort: txt(zelle(w, z, 1)), tuer: t, typ: txt(zelle(w, z, 3)), ort: txt(zelle(w, z, 4)), bem: txt(zelle(w, z, 8))}); }
+  out.push({standort: txt(zelle(w, z, 1)), tuer: t, typ: txt(zelle(w, z, 3)), ort: txt(zelle(w, z, 4)), lat: zahl(zelle(w, z, 5)), lng: zahl(zelle(w, z, 6)), farbe: txt(zelle(w, z, 7)), bem: txt(zelle(w, z, 8))}); }
   return out; }
 function typen(w){ var out = {}; for(var z = ERSTE; z <= w.length; z++){ var n = txt(zelle(w, z, 1)); if(n) out[n] = txt(zelle(w, z, 2)); } return out; }
 function kennzahlen(w, sB, sW, von, bis){ var out = []; for(var z = von; z <= Math.min(bis, w.length); z++){ var b = txt(zelle(w, z, sB)), v = zelle(w, z, sW); if(b && !leer(v)) out.push([b, v]); } return out; }
@@ -294,6 +294,7 @@ function seiteVerwaltung(s){
   add(k, kachel("🧽", "Kabinenreinigung", "Monat eintragen, Stunden und Beträge", "#/verwaltung/reinigung"),
     kachel("📦", "Ausleihliste", "Buchungen anlegen, Preise, Rabatt und Zahlung", "#/verwaltung/ausleihe"),
     kachel("🔑", "Schlüssel", "Wer hat welchen Schlüssel, Schlösser", "#/verwaltung/schluessel"),
+    kachel("🗺️", "Karte", "Lagerorte, Schlösser und Kameras auf dem Gelände", "#/verwaltung/karte"),
     kachel("🗂️", "Inventar", "Gegenstände, Lagerorte und Leihgebühren", "#/verwaltung/inventar"),
     kachel("✅", "Aufgaben", "Offene Aufgaben aus Planner und der iCloud-Liste für die monatliche Ausschusssitzung", "#/verwaltung/aufgaben"),
     kachel("💧", "Bewässerungssteuerung", "Alter und neuer Sportplatz: Kamera und Bewässerung", "#/verwaltung/bewaesserung"),
@@ -595,7 +596,8 @@ function seiteSchluessel(s){
     var leute = schluessel(w), farben = typen(D.blaetter[BLATT.typen] || []);
     var schreibt = darf("schluessel");
     add(s, el("h1", null, "Schlüssel"), schreibt ? el("p", "lead", "Schlüsselträger ändern oder neu anlegen. Die Bestandsübersicht rechnet die Excel selbst.") : nurLesenHinweis("schluessel"));
-    if(schreibt) add(s, add(el("div", "reihe"), btn("primary", "+ Neuer Schlüsselträger", function(){ schluesselBearbeiten(null, leute); })));
+    var zurKarte = el("a", "btn", "🗺️ Schlösser auf der Karte"); zurKarte.href = "#/verwaltung/karte";
+    add(s, add(el("div", "reihe"), schreibt ? btn("primary", "+ Neuer Schlüsselträger", function(){ schluesselBearbeiten(null, leute); }) : null, zurKarte));
     /* Bestandsübersicht aus N–Q. Nur Zeilen mit mindestens einer Zahl und nur Spalten, in denen etwas steht
        (in der Excel ist der Bestand noch nicht gepflegt, dann bleibt nur „Im Umlauf“). */
     var statZeilen = [], spaltenAn = [false, false, false];
@@ -679,6 +681,76 @@ function schluesselBearbeiten(p, leute){
   });
 }
 
+/* --- Karte ---
+   Wie die Karte der früheren iPhone-App: Lagerorte (Blatt „Lagerorte“), Schlösser (Blatt „Schlösser“) und Kameras (Blatt „Kameras“)
+   mit Lat/Lng aus der Excel. Kartenbibliothek Leaflet (cdnjs, mit Prüfsumme), Karten von OpenStreetMap (kostenlos, mit Namensnennung).
+   Bewässerung fehlt bewusst: dort stehen noch Platzhalter-Koordinaten. Texte aus der Excel nur als Text einsetzen, nie als HTML. */
+var GELAENDE = [49.63965, 9.25335], gelaendeZoom = function(){ return window.innerWidth < 600 ? 17 : 18; }, KARTE_ARTEN = {ort: true, schloss: true, kamera: true};
+function leafletLaden(){
+  if(window.L) return Promise.resolve(window.L);
+  if(leafletLaden.p) return leafletLaden.p;
+  var basis = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/";
+  leafletLaden.p = new Promise(function(ok, fehler){
+    var c = document.createElement("link"); c.rel = "stylesheet"; c.href = basis + "leaflet.css"; c.integrity = "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"; c.crossOrigin = "anonymous"; document.head.appendChild(c);
+    var j = document.createElement("script"); j.src = basis + "leaflet.js"; j.integrity = "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"; j.crossOrigin = "anonymous";
+    j.onload = function(){ ok(window.L); }; j.onerror = function(){ leafletLaden.p = null; fehler(new Error("Die Kartenbibliothek konnte nicht geladen werden. Bitte Internetverbindung prüfen und neu laden.")); };
+    document.head.appendChild(j); });
+  return leafletLaden.p;
+}
+function farbeHex(f, std){ return /^#?[0-9a-f]{6}$/i.test(f || "") ? (f[0] === "#" ? "" : "#") + f : std; }
+function seiteKarte(s){
+  pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Karte"]]);
+  ladeHinweis(s);
+  var blattOderLeer = function(n){ return Q().blatt(n).catch(function(){ return []; }); };
+  Promise.all([laden(), blattOderLeer("Lagerorte"), blattOderLeer("Kameras"), leafletLaden()]).then(function(r){
+    var D = r[0], wO = r[1], wK = r[2], L = r[3];
+    s.textContent = "";
+    add(s, el("h1", null, "Karte"), el("p", "lead", "Lagerorte, Schlösser und Kameras laut Liegenschaften-Excel. Punkt antippen für Details. Positionen ändern: Lat/Lng in den Blättern „Lagerorte“, „Schlösser“, „Kameras“."));
+    var punkte = [], inv = inventar(D.blaetter[BLATT.inventar] || []), leute = schluessel(D.blaetter[BLATT.schluessel] || []), farben = typen(D.blaetter[BLATT.typen] || []);
+    for(var z = ERSTE; z <= wO.length; z++){ var n = txt(zelle(wO, z, 1)), la = zahl(zelle(wO, z, 3)), lo = zahl(zelle(wO, z, 4));
+      if(n && la != null && lo != null) punkte.push({art: "ort", titel: n, unter: txt(zelle(wO, z, 2)), lat: la, lng: lo, farbe: farbeHex(txt(zelle(wO, z, 5)), "#1565c0")}); }
+    schloesser(D.blaetter[BLATT.schloesser] || []).forEach(function(x){ if(x.lat != null && x.lng != null)
+      punkte.push({art: "schloss", titel: x.tuer, unter: [x.standort, x.typ].filter(Boolean).join(" · "), lat: x.lat, lng: x.lng, farbe: farbeHex(x.farbe || farben[x.typ], "#666666"), x: x}); });
+    for(var k = ERSTE; k <= wK.length; k++){ var kn = txt(zelle(wK, k, 1)), kla = zahl(zelle(wK, k, 3)), klo = zahl(zelle(wK, k, 4));
+      if(kn && kla != null && klo != null) punkte.push({art: "kamera", titel: kn, unter: txt(zelle(wK, k, 2)), lat: kla, lng: klo, farbe: farbeHex(txt(zelle(wK, k, 7)), "#37474f"), bem: txt(zelle(wK, k, 8)), stream: txt(zelle(wK, k, 5))}); }
+    var ARTEN = [["ort", "📦", "Lagerorte"], ["schloss", "🔑", "Schlösser"], ["kamera", "📷", "Kameras"]];
+    var leiste = el("div", "reihe kfilter");
+    ARTEN.forEach(function(a){ var n = punkte.filter(function(p){ return p.art === a[0]; }).length; if(!n) return;
+      var b = btn(KARTE_ARTEN[a[0]] ? "an" : "", a[1] + " " + a[2] + " (" + n + ")", function(){ KARTE_ARTEN[a[0]] = !KARTE_ARTEN[a[0]]; b.classList.toggle("an", KARTE_ARTEN[a[0]]); b.setAttribute("aria-pressed", KARTE_ARTEN[a[0]]); zeichnen(); });
+      b.setAttribute("aria-pressed", !!KARTE_ARTEN[a[0]]); add(leiste, b); });
+    add(leiste, el("span", "sp"), btn("", "⌖ Gelände", function(){ karte.setView(GELAENDE, gelaendeZoom()); }), btn("", "Alle Punkte", function(){ var g = sichtbar(); if(g.length) karte.fitBounds(g.map(function(p){ return [p.lat, p.lng]; }), {padding: [30, 30]}); }));
+    add(s, leiste);
+    var div = el("div", "karte-map"); add(s, div);
+    if(!punkte.length) add(s, el("p", "lead", "In der Excel sind noch keine Koordinaten eingetragen."));
+    var karte = L.map(div, {scrollWheelZoom: true}).setView(GELAENDE, gelaendeZoom());
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "© <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"}).addTo(karte);
+    var ebene = L.layerGroup().addTo(karte);
+    function sichtbar(){ return punkte.filter(function(p){ return KARTE_ARTEN[p.art]; }); }
+    function detail(p){ var d = el("div", "kpop"); add(d, el("b", null, p.titel)); if(p.unter) add(d, el("div", "grau", p.unter));
+      if(p.art === "ort"){ var dinge = inv.filter(function(i){ return i.ort1 === p.titel || i.ort2 === p.titel; });
+        add(d, el("div", null, dinge.length ? dinge.length + " Inventar-Positionen:" : "Keine Inventar-Positionen mit diesem Lagerort."));
+        if(dinge.length){ var ul = el("ul"); dinge.slice(0, 8).forEach(function(i){ add(ul, el("li", null, (i.anzahlRoh != null && i.anzahlRoh !== "" ? txt(i.anzahlRoh) + "× " : "") + i.bez)); }); if(dinge.length > 8) add(ul, el("li", "grau", "… und " + (dinge.length - 8) + " weitere")); add(d, ul); }
+        var a = el("a", null, "Im Inventar ansehen ›"); a.href = "#/verwaltung/inventar"; add(d, a); }
+      if(p.art === "schloss"){ var f = /general/i.test(p.x.typ) ? "gen" : /t(ü|ue)r\s*1/i.test(p.x.typ) ? "t1" : /t(ü|ue)r\s*2/i.test(p.x.typ) ? "t2" : null;
+        if(p.x.ort) add(d, el("div", null, "Lagerort: " + p.x.ort));
+        if(f){ var akt = leute.filter(function(x){ return /^aktiv/i.test(x.status) && x[f] > 0; }); add(d, el("div", null, "Schlüssel „" + p.x.typ + "“ bei " + akt.length + " aktiven Schlüsselträgern")); }
+        if(p.x.bem) add(d, el("div", "grau", p.x.bem));
+        var a2 = el("a", null, "Zur Schlüsselliste ›"); a2.href = "#/verwaltung/schluessel"; add(d, a2); }
+      if(p.art === "kamera"){ add(d, el("div", null, p.stream ? "Stream eingetragen" : "Noch nicht verbunden (keine Stream-Adresse)")); if(p.bem) add(d, el("div", "grau", p.bem)); }
+      return d; }
+    function zeichnen(){ ebene.clearLayers();
+      sichtbar().forEach(function(p){ var sym = {ort: "📦", schloss: "🔑", kamera: "📷"}[p.art];
+        var i = L.divIcon({className: "kpin-h", html: "<span class=\"kpin " + p.art + "\" style=\"background:" + p.farbe + "\">" + sym + "</span>", iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14]});
+        L.marker([p.lat, p.lng], {icon: i, title: p.titel, alt: p.titel, riseOnHover: true}).bindPopup(function(){ return detail(p); }).addTo(ebene); }); }
+    zeichnen();
+    /* Legende Schlüsseltypen */
+    var typenDa = {}; punkte.forEach(function(p){ if(p.art === "schloss" && p.x.typ) typenDa[p.x.typ] = p.farbe; });
+    if(Object.keys(typenDa).length){ var lg = el("div", "kleg"); add(lg, el("span", "grau", "Schlüsseltypen: "));
+      Object.keys(typenDa).forEach(function(t){ var pk = el("span", "punkt"); pk.style.background = typenDa[t]; add(lg, add(el("span"), pk, t)); }); add(s, lg); }
+    setTimeout(function(){ karte.invalidateSize(); }, 50);
+  }).catch(function(e){ fehlerZeigen(e && e.status ? fehlerText(e) : (e && e.message) || "Die Karte konnte nicht geladen werden."); });
+}
+
 /* --- Inventar --- */
 function seiteInventar(s){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Inventar"]]);
@@ -688,7 +760,8 @@ function seiteInventar(s){
     var w = D.blaetter[BLATT.inventar]; if(!w){ add(s, el("div", "fehler", "Das Blatt „Übersicht“ fehlt in der Excel.")); return; }
     var liste = inventar(w);
     add(s, el("h1", null, "Inventar"), el("p", "lead", "Die Leihgebühr hier ist der Listenpreis in der Ausleihliste."));
-    if(darf("verwaltung")) add(s, add(el("div", "reihe"), btn("primary", "+ Neuer Gegenstand", function(){ bearbeiten(null); }))); else add(s, nurLesenHinweis("verwaltung"));
+    var zurKarte = el("a", "btn", "🗺️ Lagerorte auf der Karte"); zurKarte.href = "#/verwaltung/karte";
+    if(darf("verwaltung")) add(s, add(el("div", "reihe"), btn("primary", "+ Neuer Gegenstand", function(){ bearbeiten(null); }), zurKarte)); else add(s, nurLesenHinweis("verwaltung"), add(el("div", "reihe"), zurKarte));
     /* Darstellung „Gruppiert mit Matrix“ (Vorschlag D): nach Lagerort 1 gruppiert, Antippen öffnet „Ändern“. */
     var darf2 = darf("verwaltung"), such = el("input", "suche"); such.type = "search"; such.placeholder = "Gegenstand suchen …";
     add(s, add(el("div", "reihe"), such)); var box = el("div", "scroll"); add(s, box);
@@ -2283,6 +2356,7 @@ function route(){
   else if(teile[1] === "ausleihe") seiteAusleihe(s, teile[2]);
   else if(teile[1] === "schluessel") seiteSchluessel(s);
   else if(teile[1] === "inventar") seiteInventar(s);
+  else if(teile[1] === "karte") seiteKarte(s);
   else if(teile[1] === "aufgaben") seiteAufgaben(s);
   else if(teile[1] === "bewaesserung") seiteBewaesserung(s, teile[2]);
   else if(teile[1] === "bandenwerbung") seiteBandenwerbung(s);
