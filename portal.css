@@ -414,3 +414,27 @@ span.haken{cursor:default}
 @media (prefers-color-scheme:dark){.chip.frei{background:#3d2516;color:#f3c9ac}}
 .matrix.dp tr.gr td small{display:block;font-weight:400;opacity:.85;margin-top:2px}
 .matrix.dp tr.frei td{color:var(--muted)}
+
+/* Kasse in der Ausleihliste */
+.kasse{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:12px 0 18px;max-width:760px}
+.kasse-kopf{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.kasse-titel{font-weight:800;font-size:17px}
+.kasse-kopf .grau{font-size:13px}
+.kasse-ist{text-align:right;background:var(--chip);border-radius:12px;padding:8px 14px}
+.kasse-ist small{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.kasse-ist b{font-size:26px;color:var(--green);font-variant-numeric:tabular-nums}
+.kasse-ist.minus b{color:var(--err)}
+.kz{display:grid;grid-template-columns:18px minmax(150px,1.2fr) 2fr auto;align-items:center;gap:10px;padding:6px 0;font-size:14.5px}
+.kz-op{font-weight:800;color:var(--muted);text-align:center}
+.kz-name{color:var(--muted)}
+.kz-bahn{height:12px;background:var(--sunken);border-radius:6px;overflow:hidden}
+.kz-bahn i{display:block;height:100%;border-radius:6px;background:#9fb3a5}
+.kz.ein .kz-bahn i{background:var(--ok)}
+.kz.aus .kz-bahn i{background:var(--err)}
+.kz.ist .kz-bahn i{background:var(--green)}
+.kz-wert{text-align:right;min-width:90px;font-variant-numeric:tabular-nums}
+.kz.aus .kz-wert{color:var(--err)}
+.kz.ist{border-top:2px solid var(--line);margin-top:4px;padding-top:10px}
+.kz.ist .kz-name,.kz.ist .kz-wert{color:var(--ink);font-weight:800}
+.kasse-fuss{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;font-size:13.5px}
+@media (max-width:560px){.kz{grid-template-columns:16px 1fr auto;row-gap:4px}.kz-bahn{grid-column:2 / 4;grid-row:2}.kasse-ist b{font-size:22px}}

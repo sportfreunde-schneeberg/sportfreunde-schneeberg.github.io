@@ -396,6 +396,33 @@ function seiteReinigung(s){
 
 /* --- Ausleihliste --- */
 var AUSWAHL_JAHR = null;
+/* Kennzahlen der Ausleihliste (Spalten L/M der Excel) als Kassen-Rechnung mit Balken:
+   Überschuss Vorjahr + Einnahmen − Ausgaben = IST-Stand; offene Posten getrennt darunter.
+   Erkannt wird über die Beschriftung in der Excel. Fehlt etwas, bleibt es bei der einfachen Liste. */
+function kasseBild(kz, jahr){
+  var f = {}, rest = [];
+  kz.forEach(function(r){ var b = txt(r[0]), k = /vorjahr|übertrag/i.test(b) ? "vor" : /einnahm/i.test(b) ? "ein" : /ausgab/i.test(b) ? "aus" : /^ist/i.test(b) ? "ist" : /offen/i.test(b) ? "offen" : null;
+    if(k && typeof r[1] === "number" && !f[k]) f[k] = {b: b, v: r[1]}; else rest.push(r); });
+  if(!f.ist || !(f.vor || f.ein || f.aus)){
+    var c = el("div", "summe"); kz.forEach(function(r){ add(c, add(el("span"), r[0] + " ", el("b", null, typeof r[1] === "number" ? euro(r[1]) : txt(r[1])))); }); return c; }
+  var wert = function(k){ return f[k] ? f[k].v : 0; };
+  var rechnet = Math.abs(wert("vor") + wert("ein") - wert("aus") - wert("ist")) < 0.01;
+  var max = Math.max.apply(null, ["vor", "ein", "aus", "ist"].map(function(k){ return Math.abs(wert(k)); }).concat([0.01]));
+  var box = el("div", "kasse"), kopf = el("div", "kasse-kopf");
+  add(kopf, add(el("div"), el("div", "kasse-titel", "Kasse " + jahr), el("div", "grau", rechnet ? "Vorjahr + Einnahmen − Ausgaben" : "laut Excel")),
+    add(el("div", "kasse-ist" + (f.ist.v < 0 ? " minus" : "")), el("small", null, f.ist.b), el("b", null, euro(f.ist.v))));
+  add(box, kopf);
+  var zeile = function(k, zeichen, art){ if(!f[k]) return;
+    var z = el("div", "kz " + art), balken = el("div", "kz-bahn"), fuell = el("i"); fuell.style.width = Math.max(1.5, Math.abs(f[k].v) / max * 100) + "%";
+    add(balken, fuell); add(z, el("span", "kz-op", rechnet ? zeichen : ""), el("span", "kz-name", f[k].b), balken, el("b", "kz-wert", euro(f[k].v))); add(box, z); };
+  zeile("vor", "", "vor"); zeile("ein", "+", "ein"); zeile("aus", "−", "aus"); zeile("ist", "=", "ist");
+  var fuss = el("div", "kasse-fuss");
+  if(f.offen) add(fuss, add(el("span", "chip " + (f.offen.v > 0 ? "offen" : "ok")), f.offen.b + ": " + euro(f.offen.v)), el("span", "grau", f.offen.v > 0 ? " noch nicht bezahlt, im IST-Stand nicht enthalten" : " alles bezahlt"));
+  rest.forEach(function(r){ add(fuss, add(el("span", "chip"), txt(r[0]) + ": " + (typeof r[1] === "number" ? euro(r[1]) : txt(r[1])))); });
+  if(fuss.childNodes.length) add(box, fuss);
+  return box;
+}
+
 function seiteAusleihe(s, unter){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste"]]);
   ladeHinweis(s);
@@ -415,7 +442,7 @@ function seiteAusleihe(s, unter){
     var neuBtn = el("a", "btn primary", "+ Neue Buchung"); neuBtn.href = "#/verwaltung/ausleihe/neu"; if(!darf("verwaltung")) neuBtn = null;
     add(kopf, add(el("label", "fld", "Jahr"), sel), el("span", "sp"), neuBtn); add(s, kopf);
     var kz = kennzahlen(w, 12, 13, 1, 14);
-    if(kz.length){ var c = el("div", "summe"); kz.forEach(function(r){ add(c, add(el("span"), r[0] + " ", el("b", null, typeof r[1] === "number" ? euro(r[1]) : txt(r[1])))); }); add(s, c); }
+    if(kz.length) add(s, kasseBild(kz, jahr));
     if(!liste.length) add(s, el("p", "lead", "Noch keine Buchungen in " + jahr + "."));
     /* Darstellung „Gruppiert mit Matrix“ wie Schlüssel und Inventar: eine Zeile je Buchung, nach Monat gruppiert.
        Name zuerst, darunter Datum und Gegenstände. Antippen öffnet „Bearbeiten“. */
