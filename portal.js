@@ -123,8 +123,14 @@ var DATEINAME = "";
 var RECHTE = {
   verwaltung: ["d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75"],
   schluessel: ["d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75", "455bdf6f964ab3b74b48e2134d5b643d8a987537d691396adb6a06c5425b7477"],
+  /* Ausleihliste: Buchungen ändern (Preis, Rabatt, Bezahlt). Neue Buchungen darf jedes angemeldete Konto anlegen („alle“). */
+  ausleihe: ["d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75", "1a1d5a3a4adf1b902e439a4a23bdef540a078c8753c9d5e0bb3700a8df36deac", "e85805a99f776e186fdb53a2ef75f91c45025575db019ad4ff3b52ed4d33df06"],
   teamwear: ["b9653028cf8b498aa3747d9fa3f8e64e50073f7de9fa4b5b8d36f642ef9256bc", "d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75"]
 };
+/* Wer bei einer neuen Ausleihbuchung eine Mail bekommt (gleiche Hash-Form wie RECHTE).
+   Die Adressen holt das Portal aus den Mitgliedern des Teams MAIL_TEAM, damit im Code keine Adresse steht. */
+var MAIL_AUSLEIHE = ["d7b9f3a32c445ded96bf3bcb146aeb0827ee68db2ca7cc12e34dd180f6e8ac75", "e85805a99f776e186fdb53a2ef75f91c45025575db019ad4ff3b52ed4d33df06"];
+var MAIL_TEAM = "TEAM Liegenschaften";
 var kontoHash = "";
 var fremdKonto = false, fehlerAnmeldung = "";
 /* Nur Vereinskonten (…@1928schneeberg.de). Gäste aus Teams (z. B. #EXT#) werden abgewiesen und abgemeldet. */
@@ -139,10 +145,11 @@ function kontoSetzen(acc){
     kontoHash = Array.prototype.map.call(new Uint8Array(h), function(b){ return ("0" + b.toString(16)).slice(-2); }).join(""); }).catch(function(){});
 }
 function darf(bereich){
-  if(TEST){ var rolle = (/[?&]rolle=([a-z]+)/.exec(location.search) || [])[1] || "verwaltung"; return rolle === bereich || (rolle === "verwaltung" && bereich === "schluessel"); }
+  if(bereich === "alle") return TEST || !!konto;
+  if(TEST){ var rolle = (/[?&]rolle=([a-z]+)/.exec(location.search) || [])[1] || "verwaltung"; return rolle === bereich || (rolle === "verwaltung" && (bereich === "schluessel" || bereich === "ausleihe")); }
   return !!konto && !!kontoHash && (RECHTE[bereich] || []).indexOf(kontoHash) > -1;
 }
-function nurLesenHinweis(bereich){ return el("div", "hinweis", bereich === "teamwear" ? "Du kannst hier nur lesen. Abhaken kann nur der Teamwear-Verantwortliche." : bereich === "schluessel" ? "Du kannst hier nur lesen. Schlüssel eintragen können nur die Zuständigen – bitte Änderungen dort melden." : "Du kannst hier nur lesen. Eintragen kann nur die Verwaltung – bitte Änderungen dort melden."); }
+function nurLesenHinweis(bereich){ return el("div", "hinweis", bereich === "teamwear" ? "Du kannst hier nur lesen. Abhaken kann nur der Teamwear-Verantwortliche." : bereich === "schluessel" ? "Du kannst hier nur lesen. Schlüssel eintragen können nur die Zuständigen – bitte Änderungen dort melden." : bereich === "ausleihe" ? "Neue Buchungen kannst du anlegen. Preis, Rabatt und Zahlung ändern können nur die Zuständigen." : "Du kannst hier nur lesen. Eintragen kann nur die Verwaltung – bitte Änderungen dort melden."); }
 /* Gibt true zurück und zeigt einen Hinweis, wenn nicht geschrieben werden darf (Sperre oder fehlendes Recht). */
 function gesperrt(f, bereich){
   bereich = bereich || "verwaltung";
@@ -213,13 +220,29 @@ function positionen(w){ var out = []; for(var z = ERSTE; z <= w.length; z++){ va
   /* v1.3+: Spalte L = Anzahl (leer = 1). F ist der Einzel-Listenpreis, G der Gesamtpreis der Zeile. */
   var anz = zahl(zelle(w, z, 11)) || 1, liste = zahl(zelle(w, z, 5));
   out.push({zeile: z, nr: zahl(zelle(w, z, 0)), sub: zahl(zelle(w, z, 1)), datum: zelle(w, z, 2), wer: wer, gegenstand: g, anzahl: anz, liste: liste != null ? liste * anz : null, preis: zahl(zelle(w, z, 6)),
-    bezahlt: txt(zelle(w, z, 7)), am: zelle(w, z, 8), bei: txt(zelle(w, z, 9)), bem: txt(zelle(w, z, 10))}); }
+    bezahlt: txt(zelle(w, z, 7)), am: zelle(w, z, 8), bei: txt(zelle(w, z, 9)), bem: txt(zelle(w, z, 10)), bis: zelle(w, z, 14)}); }
   return out; }
 /* Höchstmenge je Gegenstand: nur wenn im Inventar eine reine Zahl steht (wie die GUI v1.4). */
 function hoechstmenge(i){ return i && typeof i.anzahlRoh === "number" && i.anzahlRoh > 0 ? i.anzahlRoh : null; }
+/* Zeitraum einer Buchung: Von = Spalte C, Bis = Spalte O (seit 26.11.2026, leer = nur ein Tag). */
+function istSerie(v){ return typeof v === "number" && v > 20000; }
+function zeitraumText(von, bis){
+  if(!istSerie(von) || !istSerie(bis) || bis <= von) return datumText(von);
+  var a = datumText(von), b = datumText(bis); return (a.slice(6) === b.slice(6) ? a.slice(0, 6) : a) + " – " + b; }
+/* Wie viele je Gegenstand im Zeitraum [von, bis] (Seriennummern) schon verliehen sind: die größte Menge an einem Tag.
+   Gezählt werden alle Blätter „Ausleihliste JJJJ“; abgesagte Positionen und Zeilen ohne echtes Datum zählen nicht. */
+function belegung(blaetter, von, bis){
+  var tage = {};
+  Object.keys(blaetter).forEach(function(n){ if(!/^Ausleihliste \d{4}$/.test(n)) return;
+    positionen(blaetter[n]).forEach(function(p){ var a = p.datum; if(!istSerie(a) || !p.gegenstand || /abgesagt/i.test(p.bem)) return;
+      var e = istSerie(p.bis) && p.bis >= a ? p.bis : a; if(e < von || a > bis) return;
+      var k = p.gegenstand.trim().toLowerCase(), t = tage[k] = tage[k] || {};
+      for(var d = Math.max(a, von); d <= Math.min(e, bis); d++) t[d] = (t[d] || 0) + p.anzahl; }); });
+  var out = {}; Object.keys(tage).forEach(function(k){ out[k] = Math.max.apply(null, Object.keys(tage[k]).map(function(d){ return tage[k][d]; })); });
+  return out; }
 function buchungen(w){ var g = {}; positionen(w).forEach(function(p){ if(p.nr == null) return; (g[p.nr] = g[p.nr] || []).push(p); });
   return Object.keys(g).map(function(k){ var ps = g[k].sort(function(a, b){ return (a.sub || 0) - (b.sub || 0); });
-    return {nr: +k, datum: ps[0].datum, wer: ps[0].wer, pos: ps,
+    return {nr: +k, datum: ps[0].datum, bis: ps[0].bis, wer: ps[0].wer, pos: ps,
       summe: ps.reduce(function(s, p){ return s + (p.preis || 0); }, 0),
       liste: ps.reduce(function(s, p){ return s + (p.liste != null ? p.liste : (p.preis || 0)); }, 0),
       bezahlt: ps.every(function(p){ return /^ja/i.test(p.bezahlt); }),
@@ -433,14 +456,15 @@ function seiteAusleihe(s, unter){
     if(!jahre.length){ add(s, el("div", "fehler", "In der Excel gibt es kein Blatt „Ausleihliste JJJJ“.")); return; }
     var jahr = AUSWAHL_JAHR && jahre.indexOf(AUSWAHL_JAHR) > -1 ? AUSWAHL_JAHR : jahre[0];
     var w = D.blaetter[ausleihBlatt(jahr)] || [], liste = buchungen(w);
-    if(unter === "neu" && darf("verwaltung")){ formularNeueBuchung(s, D, jahre); return; }
-    var bm = /^(\d+)$/.exec(unter || ""); if(bm && darf("verwaltung")){ var b = liste.filter(function(x){ return x.nr === +bm[1]; })[0]; if(b){ formularBuchung(s, b, jahr); return; } }
+    if(unter === "neu" && darf("alle")){ formularNeueBuchung(s, D, jahre); return; }
+    var bm = /^(\d+)$/.exec(unter || ""); if(bm && darf("ausleihe")){ var b = liste.filter(function(x){ return x.nr === +bm[1]; })[0]; if(b){ formularBuchung(s, b, jahr); return; } }
 
     add(s, el("h1", null, "Ausleihliste"));
+    if(!darf("ausleihe")) add(s, nurLesenHinweis("ausleihe"));
     var kopf = el("div", "reihe"), sel = el("select"); sel.style.maxWidth = "160px";
     jahre.forEach(function(j){ var o = el("option", null, String(j)); o.value = j; add(sel, o); }); sel.value = jahr;
     sel.addEventListener("change", function(){ AUSWAHL_JAHR = +sel.value; route(); });
-    var neuBtn = el("a", "btn primary", "+ Neue Buchung"); neuBtn.href = "#/verwaltung/ausleihe/neu"; if(!darf("verwaltung")) neuBtn = null;
+    var neuBtn = el("a", "btn primary", "+ Neue Buchung"); neuBtn.href = "#/verwaltung/ausleihe/neu"; if(!darf("alle")) neuBtn = null;
     add(kopf, add(el("label", "fld", "Jahr"), sel), el("span", "sp"), neuBtn); add(s, kopf);
     var kz = kennzahlen(w, 12, 13, 1, 14);
     if(kz.length) add(s, kasseBild(kz, jahr));
@@ -448,7 +472,7 @@ function seiteAusleihe(s, unter){
     /* Darstellung „Gruppiert mit Matrix“ wie Schlüssel und Inventar: eine Zeile je Buchung, nach Monat gruppiert.
        Name zuerst, darunter Datum und Gegenstände. Antippen öffnet „Bearbeiten“. */
     if(liste.length){
-      var schreibt = darf("verwaltung"), such = el("input", "suche"); such.type = "search"; such.placeholder = "Name oder Gegenstand suchen …";
+      var schreibt = darf("ausleihe"), such = el("input", "suche"); such.type = "search"; such.placeholder = "Name oder Gegenstand suchen …";
       add(s, add(el("div", "reihe"), such)); var box = el("div", "scroll"); add(s, box);
       var monatVon = function(b){ if(!(typeof b.datum === "number" && b.datum > 20000)) return -1; var d = serieZuDatum(b.datum); return d.getUTCFullYear() * 12 + d.getUTCMonth(); };
       var zeigen = function(){ box.textContent = ""; var q = such.value.trim().toLowerCase(), gruppen = {};
@@ -463,11 +487,11 @@ function seiteAusleihe(s, unter){
           add(tb, add(el("tr", "gr"), el("td", null, (m < 0 ? "ohne Datum" : MONATE[m % 12] + " " + Math.floor(m / 12)) + " · " + g.length + " · " + euro(summe)))); tb.lastChild.firstChild.colSpan = 6;
           g.forEach(function(b){ var tr = el("tr", b.abgesagt ? "aus" : null), nm = el("th");
             var dinge = b.pos.map(function(p){ return (p.anzahl > 1 ? p.anzahl + "× " : "") + (p.gegenstand || "–"); }).join(", ");
-            add(nm, el("b", null, b.wer || "–"), el("small", "nurhandy", datumText(b.datum) + " · Nr. " + b.nr), el("small", null, dinge));
+            add(nm, el("b", null, b.wer || "–"), el("small", "nurhandy", zeitraumText(b.datum, b.bis) + " · Nr. " + b.nr), el("small", null, dinge));
             var bem = b.pos.map(function(p){ return p.bem; }).filter(Boolean).join(" · "); if(bem) add(nm, el("small", null, bem));
             var rab = b.liste - b.summe > 0.005 && !b.abgesagt;
             var preis = el("td", "m geb"); add(preis, el("span", null, euro(b.summe))); if(rab) add(preis, el("small", "rabatt", "statt " + euro(b.liste)));
-            add(tr, nm, el("td", "breit", String(b.nr)), el("td", "breit", datumText(b.datum)), preis,
+            add(tr, nm, el("td", "breit", String(b.nr)), el("td", "breit", zeitraumText(b.datum, b.bis)), preis,
               add(el("td", "m bez"), b.abgesagt ? el("span", "chip grau", "abgesagt") : el("span", "chip " + (b.bezahlt ? "ok" : "offen"), b.bezahlt ? "✓" : "offen")),
               el("td", "pf", schreibt ? "›" : ""));
             if(schreibt) matrixKlick(tr, function(){ location.hash = "#/verwaltung/ausleihe/" + b.nr; });
@@ -480,64 +504,132 @@ function seiteAusleihe(s, unter){
 function formularNeueBuchung(s, D, jahre){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Neue Buchung"]]);
   var inv = inventar(D.blaetter[BLATT.inventar] || []).filter(function(i){ return !/nicht/i.test(i.wer); });
-  add(s, el("h1", null, "Neue Buchung"), el("p", "lead", "Der Listenpreis kommt automatisch aus dem Inventar. Weicht der Preis ab, ist die Differenz der Rabatt."));
+  add(s, el("h1", null, "Neue Buchung"), el("p", "lead", "Der Listenpreis kommt automatisch aus dem Inventar. Weicht der Preis ab, ist die Differenz der Rabatt. " +
+    "Bei Gegenständen mit fester Anzahl siehst du, wie viele im Zeitraum noch frei sind."));
   var f = el("form", "karte"); f.noValidate = true;
-  var fDatum = el("input"); fDatum.type = "date"; fDatum.value = heuteISO();
+  var fVon = el("input"); fVon.type = "date"; fVon.value = heuteISO();
+  var fBis = el("input"); fBis.type = "date"; fBis.min = fVon.value;
   var fWer = el("input"); fWer.placeholder = "Name oder Verein"; fWer.autocomplete = "off";
-  var kopf = el("div", "formular"); add(kopf, add(el("label", "fld", "Datum"), fDatum), add(el("label", "fld w2", "Wer leiht aus?"), fWer));
-  var posBox = el("div");
+  var kopf = el("div", "formular");
+  add(kopf, add(el("label", "fld", "Von"), fVon), add(el("label", "fld", "Bis (leer = ein Tag)"), fBis), add(el("label", "fld w2", "Wer leiht aus?"), fWer));
+  var posBox = el("div"), belegt = {};
+  /* Zeitraum als Seriennummern; Bis leer oder vor Von = nur ein Tag. */
+  function zeitraum(){ var a = isoZuDatum(fVon.value), b = isoZuDatum(fBis.value); if(!a) return null;
+    var v = datumZuSerie(a), e = b ? datumZuSerie(b) : v; return {von: v, bis: e < v ? v : e, falsch: !!b && datumZuSerie(b) < v}; }
+  function schluesselVon(bez){ return String(bez || "").trim().toLowerCase(); }
+  /* frei = Höchstmenge − im Zeitraum schon gebucht − in den anderen Positionen dieser Buchung gewählt */
+  function frei(i, ausser){ var max = hoechstmenge(i); if(!max) return null;
+    var hier = 0; [].forEach.call(posBox.children, function(z){ if(z !== ausser && z._g.value === i.bez) hier += parseInt(z._a.value, 10) || 1; });
+    return Math.max(0, max - (belegt[schluesselVon(i.bez)] || 0) - hier); }
+  function belegungNeu(){ var zr = zeitraum(); belegt = zr ? belegung(D.blaetter, zr.von, zr.bis) : {}; }
+  function alleAktualisieren(){ [].forEach.call(posBox.children, function(z){ z._neu(true); }); summe(); }
   function posZeile(){
     var z = el("div", "pos"), g = el("select"), o0 = el("option", null, "Gegenstand wählen"); o0.value = ""; add(g, o0);
-    inv.forEach(function(i){ var o = el("option", null, i.bez + (i.gebuehr != null ? " (" + euro(i.gebuehr) + ")" : "")); o.value = i.bez; add(g, o); });
+    inv.forEach(function(i){ var o = el("option"); o.value = i.bez; o._i = i; add(g, o); });
     var a = el("input"); a.type = "number"; a.inputMode = "numeric"; a.min = 1; a.value = 1;
     var p = el("input"); p.inputMode = "decimal"; p.placeholder = "Gesamtpreis €";
     var b = el("input"); b.placeholder = "Bemerkung (optional)";
     var hinweis = el("small"); hinweis.style.color = "var(--muted)";
     function artikel(){ return inv.filter(function(x){ return x.bez === g.value; })[0]; }
-    function neuRechnen(){ var i = artikel(), max = hoechstmenge(i), n = parseInt(a.value, 10) || 1;
-      a.max = max || ""; hinweis.textContent = max ? "höchstens " + max : "";
-      if(max && n > max){ n = max; a.value = max; }
-      p.value = i && i.gebuehr != null ? zahlText(rund(i.gebuehr * n)) : ""; summe(); }
-    g.addEventListener("change", neuRechnen); a.addEventListener("input", neuRechnen);
+    function optionenText(){ [].forEach.call(g.options, function(o){ if(!o._i) return; var i = o._i, fr = frei(i, z), max = hoechstmenge(i);
+      o.textContent = i.bez + (i.gebuehr != null ? " (" + euro(i.gebuehr) + ")" : "") + (max ? (fr > 0 ? " · noch " + fr + " von " + max + " frei" : " · im Zeitraum ausgebucht") : "");
+      o.disabled = !!max && fr <= 0 && o.value !== g.value; }); }
+    /* nurAnzeige: bei Datumswechsel Anzahl begrenzen, Preis aber nur neu rechnen, wenn sich die Anzahl ändert */
+    function neuRechnen(nurAnzeige){ var i = artikel(), max = hoechstmenge(i), fr = i ? frei(i, z) : null, n = parseInt(a.value, 10) || 1, vorher = n;
+      a.max = fr != null ? fr : "";
+      hinweis.textContent = max ? (fr > 0 ? "noch " + fr + " von " + max + " frei" : "im Zeitraum ausgebucht") : "";
+      hinweis.style.color = max && fr <= 0 ? "var(--rot, #b3261e)" : "var(--muted)";
+      if(fr != null && fr > 0 && n > fr){ n = fr; a.value = fr; }
+      if(!nurAnzeige || n !== vorher) p.value = i && i.gebuehr != null ? zahlText(rund(i.gebuehr * n)) : "";
+      optionenText(); }
+    g.addEventListener("change", function(){ neuRechnen(); andere(); }); a.addEventListener("input", function(){ neuRechnen(); andere(); });
+    function andere(){ [].forEach.call(posBox.children, function(y){ if(y !== z) y._neu(true); }); summe(); }
     p.addEventListener("input", summe);
-    var x = btn("klein", "Entfernen", function(){ if(posBox.children.length > 1){ z.remove(); summe(); } });
+    var x = btn("klein", "Entfernen", function(){ if(posBox.children.length > 1){ z.remove(); alleAktualisieren(); } });
     var la = add(el("label", "fld", "Anzahl"), a, hinweis);
     add(z, add(el("label", "fld breit", "Gegenstand"), g), la, add(el("label", "fld", "Preis gesamt (€)"), p), add(el("label", "fld breit", "Bemerkung"), b), x);
-    z._g = g; z._a = a; z._p = p; z._b = b; z._max = function(){ return hoechstmenge(artikel()); }; add(posBox, z); }
+    z._g = g; z._a = a; z._p = p; z._b = b; z._art = artikel; z._neu = neuRechnen; add(posBox, z); optionenText(); }
   var sumEl = el("div", "summe");
   function summe(){ var t = 0; [].forEach.call(posBox.children, function(z){ t += eingabeZahl(z._p.value) || 0; }); sumEl.textContent = ""; add(sumEl, add(el("span"), "Summe ", el("b", null, euro(t)))); }
-  posZeile(); summe();
+  [fVon, fBis].forEach(function(e){ e.addEventListener("change", function(){ fBis.min = fVon.value; belegungNeu(); alleAktualisieren(); }); });
+  belegungNeu(); posZeile(); summe();
   var speichern = el("button", "btn primary", "Buchung speichern"); speichern.type = "submit";
   var abbrechen = el("a", "btn", "Abbrechen"); abbrechen.href = "#/verwaltung/ausleihe";
-  add(f, kopf, el("h2", null, "Positionen"), posBox, btn("klein", "+ Weitere Position", posZeile), sumEl, add(el("div", "reihe"), speichern, abbrechen));
+  add(f, kopf, el("h2", null, "Positionen"), posBox, btn("klein", "+ Weitere Position", function(){ posZeile(); alleAktualisieren(); }), sumEl,
+    el("p", "grau", "Nach dem Speichern bekommt die Verwaltung automatisch eine Mail mit der Buchung."), add(el("div", "reihe"), speichern, abbrechen));
   add(s, f);
-  f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f)) return;
-    var d = isoZuDatum(fDatum.value), wer = fWer.value.trim();
-    var pos = [].map.call(posBox.children, function(z){ return {g: z._g.value, n: parseInt(z._a.value, 10) || 1, max: z._max(), p: eingabeZahl(z._p.value), b: z._b.value.trim()}; }).filter(function(x){ return x.g; });
-    var zuViel = pos.filter(function(x){ return x.max && x.n > x.max; })[0];
-    if(zuViel){ zeigeToast("Von „" + zuViel.g + "“ gibt es höchstens " + zuViel.max + "."); return; }
-    if(!d){ zeigeToast("Bitte ein Datum wählen."); return; }
+  /* Prüft die Mengen gegen die übergebenen Blätter; gibt eine Meldung zurück oder "". */
+  function mengenFehler(blaetter, zr, pos){
+    var bel = belegung(blaetter, zr.von, zr.bis), summeJe = {};
+    pos.forEach(function(x){ if(x.max) summeJe[x.g] = (summeJe[x.g] || 0) + x.n; });
+    var g = Object.keys(summeJe).filter(function(k){ var max = pos.filter(function(x){ return x.g === k; })[0].max; return summeJe[k] > max - (bel[schluesselVon(k)] || 0); })[0];
+    if(!g) return "";
+    var max = pos.filter(function(x){ return x.g === g; })[0].max, rest = Math.max(0, max - (bel[schluesselVon(g)] || 0));
+    return "Von „" + g + "“ sind im Zeitraum nur noch " + rest + " von " + max + " frei" + (rest ? "." : " – bitte einen anderen Zeitraum wählen."); }
+  f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f, "alle")) return;
+    var zr = zeitraum(), d = isoZuDatum(fVon.value), wer = fWer.value.trim();
+    var pos = [].map.call(posBox.children, function(z){ return {g: z._g.value, n: parseInt(z._a.value, 10) || 1, max: hoechstmenge(z._art()), p: eingabeZahl(z._p.value), b: z._b.value.trim()}; }).filter(function(x){ return x.g; });
+    if(!d || !zr){ zeigeToast("Bitte ein Von-Datum wählen."); return; }
+    if(zr.falsch){ zeigeToast("Das Bis-Datum liegt vor dem Von-Datum."); fBis.focus(); return; }
+    if(zr.bis - zr.von > 366){ zeigeToast("Der Zeitraum ist länger als ein Jahr – bitte prüfen."); return; }
     if(!wer){ zeigeToast("Bitte eintragen, wer ausleiht."); fWer.focus(); return; }
     if(!pos.length){ zeigeToast("Bitte mindestens einen Gegenstand wählen."); return; }
+    var mf = mengenFehler(D.blaetter, zr, pos); if(mf){ zeigeToast(mf); return; }
     var blatt = ausleihBlatt(d.getFullYear());
     if(jahre.indexOf(d.getFullYear()) < 0){ add(f, el("div", "fehler", "In der Excel gibt es das Blatt „" + blatt + "“ noch nicht. Bitte zuerst in der Excel anlegen.")); return; }
     speichern.disabled = true;
-    frisch(blatt).then(function(w){
-      var nr = positionen(w).reduce(function(m, p){ return Math.max(m, p.nr || 0); }, 0) + 1, serie = datumZuSerie(d), kette = Promise.resolve(), werte = w;
+    var mitBis = zr.bis > zr.von, alleBlaetter = jahre.map(ausleihBlatt);
+    /* Vor dem Schreiben alle Ausleihlisten frisch lesen: Hat inzwischen jemand anderes gebucht, wird nicht überbucht. */
+    Promise.all(alleBlaetter.map(function(n){ return frisch(n); })).then(function(){
+      var mf2 = mengenFehler(D.blaetter, zr, pos); if(mf2){ var e = new Error(mf2 + " (inzwischen gebucht)"); e.menge = true; throw e; }
+      var w = D.blaetter[blatt];
+      var nr = positionen(w).reduce(function(m, p){ return Math.max(m, p.nr || 0); }, 0) + 1, serie = zr.von, kette = Promise.resolve(), werte = w;
+      /* Spaltenkopf O4 „Bis“ anlegen, falls das Jahresblatt ihn noch nicht hat */
+      if(mitBis && !txt(zelle(w, 4, 14))) kette = kette.then(function(){ return Q().schreiben(blatt, "O4", [["Bis"]]); });
       pos.forEach(function(p, i){ kette = kette.then(function(){
         var z = naechsteFreieZeile(werte, 10);
-        /* A–E und G–L getrennt schreiben, F (Listenpreis, Formel) nie anfassen. L = Anzahl (v1.3+). */
+        /* A–E und G–L getrennt schreiben, F (Listenpreis, Formel) nie anfassen. L = Anzahl (v1.3+), O = Bis (leer = ein Tag). */
         return Q().schreiben(blatt, "A" + z + ":E" + z, [[nr, i + 1, serie, wer, p.g]], [[null, null, "dd.mm.yyyy", null, null]])
           .then(function(){ return Q().schreiben(blatt, "G" + z + ":L" + z, [[p.p != null ? p.p : "", "Nein", "", "", p.b, p.n]]); })
+          .then(function(){ return mitBis ? Q().schreiben(blatt, "O" + z, [[zr.bis]], [["dd.mm.yyyy"]]) : null; })
           .then(function(){ return frisch(blatt); }).then(function(w2){ werte = w2; }); }); });
       return kette.then(function(){ return nr; });
-    }).then(function(nr){ AUSWAHL_JAHR = d.getFullYear(); zeigeToast("Buchung Nr. " + nr + " gespeichert ✓"); location.hash = "#/verwaltung/ausleihe"; })
-      .catch(function(e){ speichern.disabled = false; add(f, el("div", "fehler", fehlerText(e))); });
+    }).then(function(nr){
+      AUSWAHL_JAHR = d.getFullYear();
+      var info = {nr: nr, wer: wer, zeitraum: zeitraumText(zr.von, mitBis ? zr.bis : null), pos: pos};
+      return ausleihMail(info).then(function(){ return " · Mail an die Verwaltung verschickt"; }, function(e){ console.warn("Ausleih-Mail", e); return " · Mail konnte nicht verschickt werden"; })
+        .then(function(zusatz){ zeigeToast("Buchung Nr. " + nr + " gespeichert ✓" + zusatz); location.hash = "#/verwaltung/ausleihe"; });
+    }).catch(function(e){ speichern.disabled = false; if(e && e.menge){ belegungNeu(); alleAktualisieren(); } add(f, el("div", "fehler", e && e.menge ? e.message : fehlerText(e))); });
   });
+}
+/* Mail bei neuer Ausleihbuchung: vom Konto, das bucht, an die Konten in MAIL_AUSLEIHE.
+   Die Adressen kommen aus den Mitgliedern von MAIL_TEAM (verglichen über den Hash), Recht Mail.Send (delegiert, Admin-Zustimmung). */
+function htmlText(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+function hashVon(adresse){ return crypto.subtle.digest("SHA-256", new TextEncoder().encode("spfr1928:" + String(adresse || "").toLowerCase()))
+  .then(function(h){ return Array.prototype.map.call(new Uint8Array(h), function(b){ return ("0" + b.toString(16)).slice(-2); }).join(""); }); }
+function ausleihMail(info){
+  var von = TEST ? "Testmodus" : (konto && (konto.name || konto.username) || "");
+  var link = location.origin + "/#/verwaltung/ausleihe/" + info.nr, summe = info.pos.reduce(function(t, p){ return t + (p.p || 0); }, 0);
+  var zeilen = info.pos.map(function(p){ return "<tr><td>" + (p.n > 1 ? p.n + " × " : "") + htmlText(p.g) + "</td><td style=\"text-align:right\">" + (p.p != null ? htmlText(euro(p.p)) : "–") + "</td><td>" + htmlText(p.b) + "</td></tr>"; }).join("");
+  var html = "<p>Neue Ausleihbuchung im Vereinsportal:</p><p><b>Nr. " + info.nr + "</b> · " + htmlText(info.wer) + "<br>Zeitraum: " + htmlText(info.zeitraum) + "</p>" +
+    "<table cellpadding=\"4\" style=\"border-collapse:collapse\"><tr><th align=\"left\">Gegenstand</th><th align=\"right\">Preis</th><th align=\"left\">Bemerkung</th></tr>" + zeilen +
+    "<tr><td><b>Summe</b></td><td style=\"text-align:right\"><b>" + htmlText(euro(summe)) + "</b></td><td></td></tr></table>" +
+    "<p>Eingetragen von " + htmlText(von) + ".</p><p><a href=\"" + htmlText(link) + "\">Buchung im Portal öffnen</a></p>";
+  var betreff = "Neue Ausleihe Nr. " + info.nr + ": " + info.wer + " (" + info.zeitraum + ")";
+  if(TEST){ window.__mail = (window.__mail || []).concat([{betreff: betreff, html: html, an: MAIL_AUSLEIHE.slice()}]); return Promise.resolve(); }
+  return gf("/groups?$filter=" + encodeURIComponent("displayName eq '" + MAIL_TEAM + "'") + "&$select=id").then(function(r){
+    var g = (r.value || [])[0]; if(!g) throw new Error("Team „" + MAIL_TEAM + "“ nicht gefunden");
+    return gf("/groups/" + g.id + "/members?$select=mail,userPrincipalName&$top=999"); }).then(function(r){
+    return Promise.all((r.value || []).map(function(u){ var a = u.mail || u.userPrincipalName; return hashVon(a).then(function(h){ return MAIL_AUSLEIHE.indexOf(h) > -1 ? a : null; }); })); }).then(function(an){
+    an = an.filter(Boolean); if(!an.length) throw new Error("keine Empfänger gefunden");
+    return pca.acquireTokenSilent({scopes: ["Mail.Send"], account: konto}).then(function(t){
+      return fetch(GR + "/me/sendMail", {method: "POST", headers: {Authorization: "Bearer " + t.accessToken, "Content-Type": "application/json"},
+        body: JSON.stringify({message: {subject: betreff, body: {contentType: "HTML", content: html}, toRecipients: an.map(function(a){ return {emailAddress: {address: a}}; })}, saveToSentItems: true})}); })
+      .then(function(res){ if(!res.ok){ var e = new Error("sendMail " + res.status); e.status = res.status; throw e; } }); });
 }
 function formularBuchung(s, b, jahr){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Nr. " + b.nr]]);
-  add(s, el("h1", null, "Buchung Nr. " + b.nr), el("p", "lead", b.wer + " · " + datumText(b.datum)));
+  add(s, el("h1", null, "Buchung Nr. " + b.nr), el("p", "lead", b.wer + " · " + zeitraumText(b.datum, b.bis)));
   var f = el("form", "karte"); f.noValidate = true;
   var felder = b.pos.map(function(p){ var i = el("input"); i.inputMode = "decimal"; i.value = p.preis != null ? zahlText(p.preis) : ""; return i; });
   var t = el("table", "tabelle"), kopf = el("tr"); ["Gegenstand", "Listenpreis", "Preis"].forEach(function(h, i){ add(kopf, el("th", i ? "z" : null, h)); }); add(t, add(el("thead"), kopf));
@@ -563,7 +655,7 @@ function formularBuchung(s, b, jahr){
     el("p", "lead", "Der Rabatt wird anteilig auf die Positionen verteilt. Beispiel Feuerwehr: Listenwert 50 €, Rabatt 20 € ergibt 30 €."),
     el("h2", null, "Zahlung"), zahlung, add(el("div", "reihe"), speichern, zurueck));
   add(s, f);
-  f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f)) return;
+  f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f, "ausleihe")) return;
     /* v1.4: „Bezahlt am“ (I) ist ein echtes Datum (Seriennummer mit Datumsformat). */
     var amDatum = isoZuDatum(fAm.value);
     var blatt = ausleihBlatt(jahr), bez = fBez.checked, stempel = bez && amDatum ? datumZuSerie(amDatum) : "", bei = bez ? fBei.value.trim() : "";
