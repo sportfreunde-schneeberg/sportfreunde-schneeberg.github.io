@@ -220,8 +220,34 @@ function positionen(w){ var out = []; for(var z = ERSTE; z <= w.length; z++){ va
   /* v1.3+: Spalte L = Anzahl (leer = 1). F ist der Einzel-Listenpreis, G der Gesamtpreis der Zeile. */
   var anz = zahl(zelle(w, z, 11)) || 1, liste = zahl(zelle(w, z, 5));
   out.push({zeile: z, nr: zahl(zelle(w, z, 0)), sub: zahl(zelle(w, z, 1)), datum: zelle(w, z, 2), wer: wer, gegenstand: g, anzahl: anz, liste: liste != null ? liste * anz : null, preis: zahl(zelle(w, z, 6)),
-    bezahlt: txt(zelle(w, z, 7)), am: zelle(w, z, 8), bei: txt(zelle(w, z, 9)), bem: txt(zelle(w, z, 10)), bis: zelle(w, z, 14)}); }
+    bezahlt: txt(zelle(w, z, 7)), am: zelle(w, z, 8), bei: txt(zelle(w, z, 9)), bem: txt(zelle(w, z, 10)), bis: zelle(w, z, 14),
+    abholung: zelle(w, z, 15), rueckgabe: zelle(w, z, 16), gibt: txt(zelle(w, z, 17)), sammelt: txt(zelle(w, z, 18))}); }
   return out; }
+/* Übergabe (seit 27.11.2026, alles optional): P Abholung, Q Rückgabe (Datum als Seriennummer, Uhrzeit als Bruchteil),
+   R „Gibt raus“, S „Sammelt ein“. Steht bei jeder Position der Buchung gleich. */
+var UEBERGABE_KOPF = ["Abholung", "Rückgabe", "Gibt raus", "Sammelt ein"];
+function zeitpunktSerie(iso, zeit){ var d = isoZuDatum(iso); if(!d) return null; var m = /^(\d{1,2}):(\d{2})/.exec(zeit || "");
+  return datumZuSerie(d) + (m ? (+m[1] * 60 + +m[2]) / 1440 : 0); }
+function zeitpunktTeile(v){ if(!istSerie(v)) return {iso: "", zeit: ""}; var t = Math.floor(v), d = serieZuDatum(t), m = Math.round((v - t) * 1440);
+  return {iso: d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()), zeit: m > 0 && m < 1440 ? pad(Math.floor(m / 60)) + ":" + pad(m % 60) : ""}; }
+function zeitpunktText(v){ if(!istSerie(v)) return txt(v); var t = zeitpunktTeile(v); return datumText(Math.floor(v)) + (t.zeit ? ", " + t.zeit + " Uhr" : ""); }
+function zeitpunktFormat(v){ return istSerie(v) ? (v % 1 ? "dd.mm.yyyy hh:mm" : "dd.mm.yyyy") : null; }
+/* Eingabefelder für die Übergabe; vorher = {abholung, rueckgabe, gibt, sammelt} (leer bei neuer Buchung). */
+function uebergabeFelder(vorher){
+  vorher = vorher || {};
+  function zp(titel, v){ var t = zeitpunktTeile(v), d = el("input"), z = el("input"); d.type = "date"; d.value = t.iso; z.type = "time"; z.value = t.zeit;
+    var l = add(el("label", "fld w2", titel), add(el("div", "reihe"), d, z)); l.lastChild.style.gap = "6px"; d.style.flex = "1"; z.style.width = "110px";
+    return {l: l, wert: function(){ return zeitpunktSerie(d.value, z.value); }, d: d}; }
+  var ab = zp("Abholung (Datum, Uhrzeit)", vorher.abholung), rk = zp("Rückgabe (Datum, Uhrzeit)", vorher.rueckgabe);
+  var gibt = el("input"), sam = el("input"); gibt.placeholder = "Name (optional)"; sam.placeholder = "Name (optional)"; gibt.value = vorher.gibt || ""; sam.value = vorher.sammelt || "";
+  var box = el("div", "formular");
+  add(box, ab.l, rk.l, add(el("label", "fld w2", "Wer gibt die Sachen raus?"), gibt), add(el("label", "fld w2", "Wer sammelt sie wieder ein?"), sam));
+  return {box: box,
+    werte: function(){ return {abholung: ab.wert(), rueckgabe: rk.wert(), gibt: gibt.value.trim(), sammelt: sam.value.trim()}; },
+    fehler: function(){ var w = this.werte(); if(w.abholung != null && w.rueckgabe != null && w.rueckgabe < w.abholung){ rk.d.focus(); return "Die Rückgabe liegt vor der Abholung."; } return ""; }}; }
+function uebergabeLeer(u){ return u.abholung == null && u.rueckgabe == null && !u.gibt && !u.sammelt; }
+function uebergabeZeile(u){ return [[u.abholung != null ? u.abholung : "", u.rueckgabe != null ? u.rueckgabe : "", u.gibt, u.sammelt]]; }
+function uebergabeFormate(u){ return [[zeitpunktFormat(u.abholung), zeitpunktFormat(u.rueckgabe), null, null]]; }
 /* Höchstmenge je Gegenstand: nur wenn im Inventar eine reine Zahl steht (wie die GUI v1.4). */
 function hoechstmenge(i){ return i && typeof i.anzahlRoh === "number" && i.anzahlRoh > 0 ? i.anzahlRoh : null; }
 /* Zeitraum einer Buchung: Von = Spalte C, Bis = Spalte O (seit 26.11.2026, leer = nur ein Tag). */
@@ -242,7 +268,9 @@ function belegung(blaetter, von, bis){
   return out; }
 function buchungen(w){ var g = {}; positionen(w).forEach(function(p){ if(p.nr == null) return; (g[p.nr] = g[p.nr] || []).push(p); });
   return Object.keys(g).map(function(k){ var ps = g[k].sort(function(a, b){ return (a.sub || 0) - (b.sub || 0); });
+    var erst = function(f){ var p = ps.filter(function(x){ return !leer(x[f]); })[0]; return p ? p[f] : (f === "gibt" || f === "sammelt" ? "" : null); };
     return {nr: +k, datum: ps[0].datum, bis: ps[0].bis, wer: ps[0].wer, pos: ps,
+      abholung: erst("abholung"), rueckgabe: erst("rueckgabe"), gibt: erst("gibt"), sammelt: erst("sammelt"),
       summe: ps.reduce(function(s, p){ return s + (p.preis || 0); }, 0),
       liste: ps.reduce(function(s, p){ return s + (p.liste != null ? p.liste : (p.preis || 0)); }, 0),
       bezahlt: ps.every(function(p){ return /^ja/i.test(p.bezahlt); }),
@@ -489,6 +517,8 @@ function seiteAusleihe(s, unter){
             var dinge = b.pos.map(function(p){ return (p.anzahl > 1 ? p.anzahl + "× " : "") + (p.gegenstand || "–"); }).join(", ");
             add(nm, el("b", null, b.wer || "–"), el("small", "nurhandy", zeitraumText(b.datum, b.bis) + " · Nr. " + b.nr), el("small", null, dinge));
             var bem = b.pos.map(function(p){ return p.bem; }).filter(Boolean).join(" · "); if(bem) add(nm, el("small", null, bem));
+            var ue = [istSerie(b.abholung) ? "Abholung " + zeitpunktText(b.abholung) : "", istSerie(b.rueckgabe) ? "Rückgabe " + zeitpunktText(b.rueckgabe) : "",
+              b.gibt ? "gibt raus: " + b.gibt : "", b.sammelt ? "sammelt ein: " + b.sammelt : ""].filter(Boolean).join(" · "); if(ue) add(nm, el("small", null, ue));
             var rab = b.liste - b.summe > 0.005 && !b.abgesagt;
             var preis = el("td", "m geb"); add(preis, el("span", null, euro(b.summe))); if(rab) add(preis, el("small", "rabatt", "statt " + euro(b.liste)));
             add(tr, nm, el("td", "breit", String(b.nr)), el("td", "breit", zeitraumText(b.datum, b.bis)), preis,
@@ -555,8 +585,10 @@ function formularNeueBuchung(s, D, jahre){
   belegungNeu(); posZeile(); summe();
   var speichern = el("button", "btn primary", "Buchung speichern"); speichern.type = "submit";
   var abbrechen = el("a", "btn", "Abbrechen"); abbrechen.href = "#/verwaltung/ausleihe";
+  var ueb = uebergabeFelder();
   add(f, kopf, el("h2", null, "Positionen"), posBox, btn("klein", "+ Weitere Position", function(){ posZeile(); alleAktualisieren(); }), sumEl,
-    el("p", "grau", "Nach dem Speichern bekommt die Verwaltung automatisch eine Mail mit der Buchung."), add(el("div", "reihe"), speichern, abbrechen));
+    el("h2", null, "Abholung und Rückgabe (optional)"), ueb.box,
+    el("p", "grau", "Nach dem Speichern bekommen die Verwaltung und du automatisch eine Mail mit der Buchung."), add(el("div", "reihe"), speichern, abbrechen));
   add(s, f);
   /* Prüft die Mengen gegen die übergebenen Blätter; gibt eine Meldung zurück oder "". */
   function mengenFehler(blaetter, zr, pos){
@@ -575,6 +607,8 @@ function formularNeueBuchung(s, D, jahre){
     if(!wer){ zeigeToast("Bitte eintragen, wer ausleiht."); fWer.focus(); return; }
     if(!pos.length){ zeigeToast("Bitte mindestens einen Gegenstand wählen."); return; }
     var mf = mengenFehler(D.blaetter, zr, pos); if(mf){ zeigeToast(mf); return; }
+    var uf = ueb.fehler(); if(uf){ zeigeToast(uf); return; }
+    var u = ueb.werte(), mitUeb = !uebergabeLeer(u);
     var blatt = ausleihBlatt(d.getFullYear());
     if(jahre.indexOf(d.getFullYear()) < 0){ add(f, el("div", "fehler", "In der Excel gibt es das Blatt „" + blatt + "“ noch nicht. Bitte zuerst in der Excel anlegen.")); return; }
     speichern.disabled = true;
@@ -586,46 +620,59 @@ function formularNeueBuchung(s, D, jahre){
       var nr = positionen(w).reduce(function(m, p){ return Math.max(m, p.nr || 0); }, 0) + 1, serie = zr.von, kette = Promise.resolve(), werte = w;
       /* Spaltenkopf O4 „Bis“ anlegen, falls das Jahresblatt ihn noch nicht hat */
       if(mitBis && !txt(zelle(w, 4, 14))) kette = kette.then(function(){ return Q().schreiben(blatt, "O4", [["Bis"]]); });
+      /* ebenso P4:S4 für die Übergabe */
+      if(mitUeb && !txt(zelle(w, 4, 15))) kette = kette.then(function(){ return Q().schreiben(blatt, "P4:S4", [UEBERGABE_KOPF]); });
       pos.forEach(function(p, i){ kette = kette.then(function(){
         var z = naechsteFreieZeile(werte, 10);
         /* A–E und G–L getrennt schreiben, F (Listenpreis, Formel) nie anfassen. L = Anzahl (v1.3+), O = Bis (leer = ein Tag). */
         return Q().schreiben(blatt, "A" + z + ":E" + z, [[nr, i + 1, serie, wer, p.g]], [[null, null, "dd.mm.yyyy", null, null]])
           .then(function(){ return Q().schreiben(blatt, "G" + z + ":L" + z, [[p.p != null ? p.p : "", "Nein", "", "", p.b, p.n]]); })
           .then(function(){ return mitBis ? Q().schreiben(blatt, "O" + z, [[zr.bis]], [["dd.mm.yyyy"]]) : null; })
+          .then(function(){ return mitUeb ? Q().schreiben(blatt, "P" + z + ":S" + z, uebergabeZeile(u), uebergabeFormate(u)) : null; })
           .then(function(){ return frisch(blatt); }).then(function(w2){ werte = w2; }); }); });
       return kette.then(function(){ return nr; });
     }).then(function(nr){
       AUSWAHL_JAHR = d.getFullYear();
-      var info = {nr: nr, wer: wer, zeitraum: zeitraumText(zr.von, mitBis ? zr.bis : null), pos: pos};
-      return ausleihMail(info).then(function(){ return " · Mail an die Verwaltung verschickt"; }, function(e){ console.warn("Ausleih-Mail", e); return " · Mail konnte nicht verschickt werden"; })
+      var info = {nr: nr, wer: wer, zeitraum: zeitraumText(zr.von, mitBis ? zr.bis : null), pos: pos, ueb: u};
+      return ausleihMail(info).then(function(){ return " · Mail an die Verwaltung und dich verschickt"; }, function(e){ console.warn("Ausleih-Mail", e); return " · Mail konnte nicht verschickt werden"; })
         .then(function(zusatz){ zeigeToast("Buchung Nr. " + nr + " gespeichert ✓" + zusatz); location.hash = "#/verwaltung/ausleihe"; });
     }).catch(function(e){ speichern.disabled = false; if(e && e.menge){ belegungNeu(); alleAktualisieren(); } add(f, el("div", "fehler", e && e.menge ? e.message : fehlerText(e))); });
   });
 }
-/* Mail bei neuer Ausleihbuchung: vom Konto, das bucht, an die Konten in MAIL_AUSLEIHE.
+/* Mail bei neuer Ausleihbuchung: vom Konto, das bucht, an die Konten in MAIL_AUSLEIHE, dazu eine Bestätigung an den Buchenden selbst.
    Die Adressen kommen aus den Mitgliedern von MAIL_TEAM (verglichen über den Hash), Recht Mail.Send (delegiert, Admin-Zustimmung). */
 function htmlText(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
 function hashVon(adresse){ return crypto.subtle.digest("SHA-256", new TextEncoder().encode("spfr1928:" + String(adresse || "").toLowerCase()))
   .then(function(h){ return Array.prototype.map.call(new Uint8Array(h), function(b){ return ("0" + b.toString(16)).slice(-2); }).join(""); }); }
 function ausleihMail(info){
-  var von = TEST ? "Testmodus" : (konto && (konto.name || konto.username) || "");
-  var link = location.origin + "/#/verwaltung/ausleihe/" + info.nr, summe = info.pos.reduce(function(t, p){ return t + (p.p || 0); }, 0);
+  var von = TEST ? "Testmodus" : (konto && (konto.name || konto.username) || ""), selbst = TEST ? "test@example.invalid" : (konto && konto.username || "");
+  var link = location.origin + "/#/verwaltung/ausleihe/" + info.nr, summe = info.pos.reduce(function(t, p){ return t + (p.p || 0); }, 0), u = info.ueb || {};
   var zeilen = info.pos.map(function(p){ return "<tr><td>" + (p.n > 1 ? p.n + " × " : "") + htmlText(p.g) + "</td><td style=\"text-align:right\">" + (p.p != null ? htmlText(euro(p.p)) : "–") + "</td><td>" + htmlText(p.b) + "</td></tr>"; }).join("");
-  var html = "<p>Neue Ausleihbuchung im Vereinsportal:</p><p><b>Nr. " + info.nr + "</b> · " + htmlText(info.wer) + "<br>Zeitraum: " + htmlText(info.zeitraum) + "</p>" +
+  var ueb = [["Abholung", u.abholung != null ? zeitpunktText(u.abholung) : ""], ["Rückgabe", u.rueckgabe != null ? zeitpunktText(u.rueckgabe) : ""], ["Gibt raus", u.gibt], ["Sammelt ein", u.sammelt]]
+    .filter(function(x){ return x[1]; }).map(function(x){ return x[0] + ": " + htmlText(x[1]); }).join("<br>");
+  var kern = "<p><b>Nr. " + info.nr + "</b> · " + htmlText(info.wer) + "<br>Zeitraum: " + htmlText(info.zeitraum) + (ueb ? "<br>" + ueb : "") + "</p>" +
     "<table cellpadding=\"4\" style=\"border-collapse:collapse\"><tr><th align=\"left\">Gegenstand</th><th align=\"right\">Preis</th><th align=\"left\">Bemerkung</th></tr>" + zeilen +
-    "<tr><td><b>Summe</b></td><td style=\"text-align:right\"><b>" + htmlText(euro(summe)) + "</b></td><td></td></tr></table>" +
-    "<p>Eingetragen von " + htmlText(von) + ".</p><p><a href=\"" + htmlText(link) + "\">Buchung im Portal öffnen</a></p>";
-  var betreff = "Neue Ausleihe Nr. " + info.nr + ": " + info.wer + " (" + info.zeitraum + ")";
-  if(TEST){ window.__mail = (window.__mail || []).concat([{betreff: betreff, html: html, an: MAIL_AUSLEIHE.slice()}]); return Promise.resolve(); }
-  return gf("/groups?$filter=" + encodeURIComponent("displayName eq '" + MAIL_TEAM + "'") + "&$select=id").then(function(r){
-    var g = (r.value || [])[0]; if(!g) throw new Error("Team „" + MAIL_TEAM + "“ nicht gefunden");
-    return gf("/groups/" + g.id + "/members?$select=mail,userPrincipalName&$top=999"); }).then(function(r){
-    return Promise.all((r.value || []).map(function(u){ var a = u.mail || u.userPrincipalName; return hashVon(a).then(function(h){ return MAIL_AUSLEIHE.indexOf(h) > -1 ? a : null; }); })); }).then(function(an){
-    an = an.filter(Boolean); if(!an.length) throw new Error("keine Empfänger gefunden");
+    "<tr><td><b>Summe</b></td><td style=\"text-align:right\"><b>" + htmlText(euro(summe)) + "</b></td><td></td></tr></table>";
+  var mails = [{betreff: "Neue Ausleihe Nr. " + info.nr + ": " + info.wer + " (" + info.zeitraum + ")",
+    html: "<p>Neue Ausleihbuchung im Vereinsportal:</p>" + kern + "<p>Eingetragen von " + htmlText(von) + ".</p><p><a href=\"" + htmlText(link) + "\">Buchung im Portal öffnen</a></p>"}];
+  var bestaetigung = {betreff: "Bestätigung: Ausleihe Nr. " + info.nr + " (" + info.zeitraum + ")",
+    html: "<p>Deine Ausleihbuchung ist eingetragen:</p>" + kern + "<p>Preis und Zahlung legt die Verwaltung fest. Bei Fragen oder Änderungen bitte an die Verwaltung wenden.</p><p>Sportfreunde Schneeberg 1928 e. V.</p>"};
+  function senden(m, an){
+    if(TEST){ window.__mail = (window.__mail || []).concat([{betreff: m.betreff, html: m.html, an: an}]); return Promise.resolve(); }
     return pca.acquireTokenSilent({scopes: ["Mail.Send"], account: konto}).then(function(t){
       return fetch(GR + "/me/sendMail", {method: "POST", headers: {Authorization: "Bearer " + t.accessToken, "Content-Type": "application/json"},
-        body: JSON.stringify({message: {subject: betreff, body: {contentType: "HTML", content: html}, toRecipients: an.map(function(a){ return {emailAddress: {address: a}}; })}, saveToSentItems: true})}); })
-      .then(function(res){ if(!res.ok){ var e = new Error("sendMail " + res.status); e.status = res.status; throw e; } }); });
+        body: JSON.stringify({message: {subject: m.betreff, body: {contentType: "HTML", content: m.html}, toRecipients: an.map(function(a){ return {emailAddress: {address: a}}; })}, saveToSentItems: true})}); })
+      .then(function(res){ if(!res.ok){ var e = new Error("sendMail " + res.status); e.status = res.status; throw e; } }); }
+  /* Empfänger der Verwaltung: Mitglieder von MAIL_TEAM, deren Hash in MAIL_AUSLEIHE steht. */
+  var empfaenger = TEST ? Promise.resolve(MAIL_AUSLEIHE.slice()) : gf("/groups?$filter=" + encodeURIComponent("displayName eq '" + MAIL_TEAM + "'") + "&$select=id").then(function(r){
+    var g = (r.value || [])[0]; if(!g) throw new Error("Team „" + MAIL_TEAM + "“ nicht gefunden");
+    return gf("/groups/" + g.id + "/members?$select=mail,userPrincipalName&$top=999"); }).then(function(r){
+    return Promise.all((r.value || []).map(function(u){ var a = u.mail || u.userPrincipalName; return hashVon(a).then(function(h){ return MAIL_AUSLEIHE.indexOf(h) > -1 ? a : null; }); })); })
+    .then(function(an){ an = an.filter(Boolean); if(!an.length) throw new Error("keine Empfänger gefunden"); return an; });
+  return Promise.all([empfaenger, TEST ? Promise.resolve("") : hashVon(selbst)]).then(function(x){
+    var an = x[0], istVerwaltung = TEST ? false : MAIL_AUSLEIHE.indexOf(x[1]) > -1;
+    /* Die Verwaltung bekommt die Mail immer; wer bucht und nicht zur Verwaltung gehört, eine eigene Bestätigung. */
+    return senden(mails[0], an).then(function(){ return selbst && !istVerwaltung ? senden(bestaetigung, [selbst]) : null; }); });
 }
 function formularBuchung(s, b, jahr){
   pfad([["Start", "#/"], ["Liegenschaften", "#/verwaltung"], ["Ausleihliste", "#/verwaltung/ausleihe"], ["Nr. " + b.nr]]);
@@ -651,11 +698,15 @@ function formularBuchung(s, b, jahr){
   if(b.bezahlt){ var am = (b.pos.filter(function(p){ return p.am; })[0] || {}).am; var m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(datumText(am)); if(m) fAm.value = m[3] + "-" + m[2] + "-" + m[1]; }
   var speichern = el("button", "btn primary", "Änderungen speichern"); speichern.type = "submit";
   var zurueck = el("a", "btn", "Abbrechen"); zurueck.href = "#/verwaltung/ausleihe";
+  var ueb = uebergabeFelder(b);
   add(f, add(el("div", "scroll"), t), add(el("div", "formular"), add(el("label", "fld", "Rabatt gesamt (€)"), fRabatt)), sumEl,
     el("p", "lead", "Der Rabatt wird anteilig auf die Positionen verteilt. Beispiel Feuerwehr: Listenwert 50 €, Rabatt 20 € ergibt 30 €."),
-    el("h2", null, "Zahlung"), zahlung, add(el("div", "reihe"), speichern, zurueck));
+    el("h2", null, "Zahlung"), zahlung, el("h2", null, "Abholung und Rückgabe"), ueb.box, add(el("div", "reihe"), speichern, zurueck));
   add(s, f);
   f.addEventListener("submit", function(ev){ ev.preventDefault(); if(gesperrt(f, "ausleihe")) return;
+    var uf = ueb.fehler(); if(uf){ zeigeToast(uf); return; }
+    var u = ueb.werte(), uAlt = {abholung: istSerie(b.abholung) ? b.abholung : null, rueckgabe: istSerie(b.rueckgabe) ? b.rueckgabe : null, gibt: b.gibt, sammelt: b.sammelt};
+    var uNeu = JSON.stringify(uebergabeZeile(u)) !== JSON.stringify(uebergabeZeile(uAlt));
     /* v1.4: „Bezahlt am“ (I) ist ein echtes Datum (Seriennummer mit Datumsformat). */
     var amDatum = isoZuDatum(fAm.value);
     var blatt = ausleihBlatt(jahr), bez = fBez.checked, stempel = bez && amDatum ? datumZuSerie(amDatum) : "", bei = bez ? fBei.value.trim() : "";
@@ -671,7 +722,10 @@ function formularBuchung(s, b, jahr){
         var warBezahlt = /^ja/i.test(p.bezahlt), unberuehrt = !bez && !p.bezahlt;
         var h = bez ? "Ja" : (unberuehrt ? null : "Nein"), iW = bez ? stempel : (warBezahlt ? "" : null), jW = bez ? bei : (warBezahlt ? "" : null);
         kette = kette.then(function(){ return Q().schreiben(blatt, "G" + p.zeile + ":K" + p.zeile, [[preis != null ? preis : "", h, iW, jW, null]], [[null, null, "dd.mm.yyyy", null, null]]); });
+        /* Übergabe (P–S) nur schreiben, wenn sie sich geändert hat */
+        if(uNeu) kette = kette.then(function(){ return Q().schreiben(blatt, "P" + p.zeile + ":S" + p.zeile, uebergabeZeile(u), uebergabeFormate(u)); });
       });
+      if(uNeu && !uebergabeLeer(u) && !txt(zelle(w, 4, 15))) kette = kette.then(function(){ return Q().schreiben(blatt, "P4:S4", [UEBERGABE_KOPF]); });
       return kette.then(function(){ return frisch(blatt); });
     }).then(function(){ zeigeToast("Buchung Nr. " + b.nr + " gespeichert ✓"); location.hash = "#/verwaltung/ausleihe"; })
       .catch(function(e){ speichern.disabled = false; add(f, el("div", "fehler", e && e.status ? fehlerText(e) : (e.message || "Fehler beim Speichern."))); });
